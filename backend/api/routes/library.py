@@ -113,10 +113,10 @@ def liked_songs(
     params  = [user_id]
 
     if min_year:
-        filters.append("EXTRACT(year FROM saved_at) >= %s")
+        filters.append("release_year >= %s")
         params.append(min_year)
     if max_year:
-        filters.append("EXTRACT(year FROM saved_at) <= %s")
+        filters.append("release_year <= %s")
         params.append(max_year)
     if min_tempo is not None:
         filters.append("tempo >= %s"); params.append(min_tempo)
@@ -146,7 +146,7 @@ def liked_songs(
     params.extend([limit, offset])
     cur.execute(f"""
         SELECT id, name, artist, album, saved_at,
-               tempo, energy, valence, danceability, acousticness
+               tempo, energy, valence, danceability, acousticness, release_year
         FROM tracks
         WHERE {where}
         ORDER BY {sort_col} {direction} NULLS LAST
@@ -169,6 +169,7 @@ def liked_songs(
                 "valence":      round(float(r[7]), 2)  if r[7] else None,
                 "danceability": round(float(r[8]), 2)  if r[8] else None,
                 "acousticness": round(float(r[9]), 2)  if r[9] else None,
+                "release_year": r[10],
                 "spotify_url":  f"https://open.spotify.com/track/{r[0]}"
             }
             for r in rows

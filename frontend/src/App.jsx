@@ -8,6 +8,7 @@ import Discovery     from "./pages/Discovery";
 import Albums        from "./pages/Albums";
 import Timeline      from "./pages/Timeline";
 import NowPlaying    from "./components/NowPlaying";
+import TimeCapsule from "./pages/TimeCapsule";
 
 const NAV_LINKS = [
   { to: "/",          label: "Sonic Identity" },
@@ -18,6 +19,7 @@ const NAV_LINKS = [
   { to: "/discovery", label: "Discovery" },
   { to: "/albums",    label: "Albums" },
   { to: "/timeline",  label: "Timeline" },
+  { to: "/capsule", label: "Time Capsules" },
 ];
 
 function Nav() {
@@ -65,6 +67,7 @@ export default function App() {
           <Route path="/discovery" element={<Discovery />} />
           <Route path="/albums"    element={<Albums />} />
           <Route path="/timeline"  element={<Timeline />} />
+          <Route path="/capsule" element={<TimeCapsule />} />
         </Routes>
         <NowPlaying />
       </div>
