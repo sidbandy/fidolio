@@ -56,7 +56,7 @@ def explore_album(
         search_resp = requests.get(
             f"{RECCOBEATS_BASE}/album/search",
             params={"searchText": album_name, "size": 10},
-            timeout=10
+            timeout=25
         )
         if search_resp.status_code == 200:
             all_albums = search_resp.json().get("content", [])
