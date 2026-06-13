@@ -9,6 +9,7 @@ import Albums        from "./pages/Albums";
 import Timeline      from "./pages/Timeline";
 import NowPlaying    from "./components/NowPlaying";
 import TimeCapsule from "./pages/TimeCapsule";
+import CollabPage from "./pages/Collab";
 
 const NAV_LINKS = [
   { to: "/",          label: "Sonic Identity" },
@@ -68,6 +69,8 @@ export default function App() {
           <Route path="/albums"    element={<Albums />} />
           <Route path="/timeline"  element={<Timeline />} />
           <Route path="/capsule" element={<TimeCapsule />} />
+          <Route path="/collab"         element={<CollabPage />} />
+          <Route path="/collab/:roomId" element={<CollabPage />} />
         </Routes>
         <NowPlaying />
       </div>
