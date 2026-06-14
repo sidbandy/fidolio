@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
@@ -340,6 +340,9 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const saveLabel = form.mode === "none"
+    ? (isEdit ? "Update Rule" : "Save Rule")
+    : (isEdit ? "Update & Sync" : "Save & Sync");
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
@@ -469,7 +472,7 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
           <button disabled={saving || !form.name.trim()}
             onClick={() => onSave(form)}
             style={btn("primary", { opacity: saving || !form.name.trim() ? 0.5 : 1 })}>
-            {saving ? "Saving..." : "Save & Sync"}
+            {saving ? "Saving..." : saveLabel}
           </button>
         </div>
       </div>
@@ -793,9 +796,10 @@ export default function Playlists() {
         sort_by:           sortBy,
         sort_order:        sortOrder,
         limit,
+        spotify_mode:     form.mode,
         playlist_name:     form.mode === "new" ? form.playlist_name : null,
         playlist_id:       form.mode === "existing" ? form.playlist_id : null,
-        rotation_enabled:  form.rotation_enabled,
+        rotation_enabled:  form.mode !== "none" && form.rotation_enabled,
         rotation_size:     form.rotation_size,
         rotation_source:   form.rotation_source,
       };
@@ -809,6 +813,7 @@ export default function Playlists() {
       });
       const d = await r.json();
       if (d.error) { alert(d.error); return; }
+      if (d.sync_error) alert(`Rule saved, but Spotify sync failed: ${d.sync_error}`);
       setShowSave(false);
       setEditTarget(null);
       loadSaved();
@@ -825,7 +830,7 @@ export default function Playlists() {
       const r = await fetch(`${API}/playlists/${id}/sync`, { method: "POST" });
       const d = await r.json();
       if (d.error) alert(d.error);
-      else { loadSaved(); alert(`✓ Synced ${d.synced} tracks`); }
+      else { loadSaved(); alert(`✓ ${d.message || "Synced"} (${d.synced} tracks)`); }
     } finally {
       setSyncing(null);
     }
@@ -852,7 +857,9 @@ export default function Playlists() {
   // ── Delete ───────────────────────────────────────────────────────────────
   const handleDelete = async (id) => {
     if (!confirm("Delete this playlist rule?")) return;
-    await fetch(`${API}/playlists/${id}`, { method: "DELETE" });
+    const r = await fetch(`${API}/playlists/${id}`, { method: "DELETE" });
+    const d = await r.json().catch(() => ({}));
+    if (d.error) alert(d.error);
     loadSaved();
   };
 

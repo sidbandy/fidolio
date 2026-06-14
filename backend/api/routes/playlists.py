@@ -55,6 +55,24 @@ def get_spotify():
     ))
 
 
+def normalize_playlist_id(value: Optional[str]) -> Optional[str]:
+    """Accept a Spotify playlist ID, URL, or URI and return the bare ID."""
+    if not value:
+        return None
+    v = value.strip()
+    if not v:
+        return None
+    if "spotify:playlist:" in v:
+        v = v.split("spotify:playlist:", 1)[1]
+    if "spotify.com/playlist/" in v:
+        v = v.split("spotify.com/playlist/", 1)[1]
+    return v.split("?", 1)[0].split("/", 1)[0].strip() or None
+
+
+def make_playlist_url(playlist_id: Optional[str]) -> Optional[str]:
+    return f"https://open.spotify.com/playlist/{playlist_id}" if playlist_id else None
+
+
 # ─── SQL condition builder ────────────────────────────────────────────────────
 
 DECADE_MAP = {
@@ -94,6 +112,8 @@ def cond_to_sql(cond: dict, exclude: bool = False):
 
     if field == "language":
         if isinstance(value, list):
+            if not value:
+                return ("1=1", []) if exclude else ("1=0", [])
             ph  = ",".join(["%s"] * len(value))
             not_ = "NOT " if exclude else ""
             return f"language {not_}IN ({ph})", [v.lower() for v in value]
@@ -149,7 +169,7 @@ def build_query(conditions, excludes, user_id, sort_by="saved_at",
     col  = sort_by if sort_by in VALID else "saved_at"
     dir_ = "ASC" if sort_order == "asc" else "DESC"
 
-    parts, params = ["user_id = %s", "energy IS NOT NULL"], [user_id]
+    parts, params = ["user_id = %s"], [user_id]
 
     for c in conditions:
         sql, p = cond_to_sql(c, exclude=False)
@@ -177,11 +197,11 @@ def rows_to_tracks(rows):
     return [{
         "id":           r[0],  "name":         r[1],
         "artist":       r[2],  "album":        r[3],
-        "energy":       round(float(r[4]), 2)  if r[4] else None,
-        "valence":      round(float(r[5]), 2)  if r[5] else None,
-        "tempo":        round(float(r[6]), 1)  if r[6] else None,
-        "danceability": round(float(r[7]), 2)  if r[7] else None,
-        "acousticness": round(float(r[8]), 2)  if r[8] else None,
+        "energy":       round(float(r[4]), 2)  if r[4] is not None else None,
+        "valence":      round(float(r[5]), 2)  if r[5] is not None else None,
+        "tempo":        round(float(r[6]), 1)  if r[6] is not None else None,
+        "danceability": round(float(r[7]), 2)  if r[7] is not None else None,
+        "acousticness": round(float(r[8]), 2)  if r[8] is not None else None,
         "saved_at":     str(r[9])[:10]          if r[9] else None,
         "release_year": r[10], "language":     r[11],
         "spotify_url":  f"https://open.spotify.com/track/{r[0]}",
@@ -265,6 +285,26 @@ def fetch_spotify_tracks(sp, playlist_id):
     return tracks
 
 
+def query_track_ids(rule, user_id, cur):
+    query, params = build_query(
+        rule.get("conditions", []), rule.get("excludes", []),
+        user_id, rule.get("sort_by", "saved_at"),
+        rule.get("sort_order", "desc"), rule.get("limit", 200),
+    )
+    cur.execute(query, params)
+    return [r[0] for r in cur.fetchall()]
+
+
+def replace_spotify_playlist(sp, playlist_id, track_ids):
+    """Fully replace a Spotify playlist, including clearing it for empty rules."""
+    sp.playlist_replace_items(playlist_id, [])
+    for i in range(0, len(track_ids), 100):
+        sp.playlist_add_items(
+            playlist_id,
+            [f"spotify:track:{t}" for t in track_ids[i:i+100]],
+        )
+
+
 # ─── Request models ───────────────────────────────────────────────────────────
 
 class PreviewBody(BaseModel):
@@ -277,6 +317,7 @@ class PreviewBody(BaseModel):
 
 class SaveBody(PreviewBody):
     name:             str
+    spotify_mode:     str = "new"              # new | existing | none | keep
     playlist_name:    Optional[str] = None   # create new Spotify playlist with this name
     playlist_id:      Optional[str] = None   # OR link to existing playlist
     rotation_enabled: bool = False
@@ -518,11 +559,40 @@ def list_playlists(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 @router.post("/")
 def create_playlist(body: SaveBody):
-    sp           = get_spotify()
-    playlist_id  = body.playlist_id
+    mode = (body.spotify_mode or "new").lower()
+    playlist_id = normalize_playlist_id(body.playlist_id)
     playlist_url = None
+    track_ids = []
 
-    if not playlist_id and body.playlist_name:
+    if mode == "none":
+        playlist_id = None
+    elif mode == "existing" and not playlist_id:
+        return {"error": "Paste a Spotify playlist ID or URL, or choose Save rule only."}
+    elif mode == "new" and not body.playlist_name:
+        return {"error": "Enter a Spotify playlist name, or choose Save rule only."}
+
+    rule = {
+        "conditions": body.conditions,
+        "excludes":   body.excludes,
+        "sort_by":    body.sort_by,
+        "sort_order": body.sort_order,
+        "limit":      body.limit,
+    }
+    rule_json = json.dumps(rule)
+
+    if mode != "none":
+        conn0 = get_conn(); cur0 = conn0.cursor()
+        try:
+            track_ids = query_track_ids(rule, body.user_id, cur0)
+        except Exception as e:
+            cur0.close(); conn0.close()
+            if "language" in str(e).lower():
+                return {"error": "Run POST /playlists/setup first"}
+            return {"error": f"Could not run playlist rule: {e}"}
+        cur0.close(); conn0.close()
+
+    if mode == "new" and body.playlist_name:
+        sp          = get_spotify()
         me          = sp.current_user()
         pl          = sp.user_playlist_create(
             me["id"], body.playlist_name, public=False,
@@ -531,15 +601,9 @@ def create_playlist(body: SaveBody):
         playlist_id  = pl["id"]
         playlist_url = pl["external_urls"]["spotify"]
     elif playlist_id:
-        playlist_url = f"https://open.spotify.com/playlist/{playlist_id}"
+        playlist_url = make_playlist_url(playlist_id)
 
-    rule_json = json.dumps({
-        "conditions": body.conditions,
-        "excludes":   body.excludes,
-        "sort_by":    body.sort_by,
-        "sort_order": body.sort_order,
-        "limit":      body.limit,
-    })
+    effective_rotation = body.rotation_enabled and bool(playlist_id)
 
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
@@ -550,31 +614,22 @@ def create_playlist(body: SaveBody):
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW()) RETURNING id
     """, (body.user_id, body.name, rule_json,
           playlist_id, playlist_url,
-          body.rotation_enabled, body.rotation_size, body.rotation_source))
+          effective_rotation, body.rotation_size, body.rotation_source))
     new_id = cur.fetchone()[0]
     conn.commit(); cur.close(); conn.close()
 
     # Immediately fill the Spotify playlist
     if playlist_id:
-        conn2 = get_conn(); cur2 = conn2.cursor()
-        query, params = build_query(
-            body.conditions, body.excludes,
-            body.user_id, body.sort_by, body.sort_order, body.limit,
-        )
         try:
-            cur2.execute(query, params)
-            track_ids = [r[0] for r in cur2.fetchall()]
-        except Exception:
-            track_ids = []
-        cur2.close(); conn2.close()
-
-        if track_ids:
-            sp.playlist_replace_items(playlist_id, [])
-            for i in range(0, len(track_ids), 100):
-                sp.playlist_add_items(
-                    playlist_id,
-                    [f"spotify:track:{t}" for t in track_ids[i:i+100]],
-                )
+            sp = locals().get("sp") or get_spotify()
+            replace_spotify_playlist(sp, playlist_id, track_ids)
+        except Exception as e:
+            return {
+                "id": new_id,
+                "playlist_id": playlist_id,
+                "playlist_url": playlist_url,
+                "error": f"Rule saved, but Spotify sync failed: {e}",
+            }
 
         conn3 = get_conn(); cur3 = conn3.cursor()
         cur3.execute(
@@ -586,35 +641,81 @@ def create_playlist(body: SaveBody):
         "id":           new_id,
         "playlist_id":  playlist_id,
         "playlist_url": playlist_url,
+        "synced":       len(track_ids) if playlist_id else 0,
         "message":      "Created and synced" if playlist_id else "Rule saved (no Spotify playlist linked)",
     }
 
 
 @router.put("/{smart_id}")
 def update_playlist(smart_id: int, body: SaveBody):
-    rule_json = json.dumps({
+    mode = (body.spotify_mode or "keep").lower()
+    incoming_pid = normalize_playlist_id(body.playlist_id)
+    rule = {
         "conditions": body.conditions, "excludes":   body.excludes,
         "sort_by":    body.sort_by,    "sort_order": body.sort_order,
         "limit":      body.limit,
-    })
+    }
+    rule_json = json.dumps(rule)
     conn = get_conn(); cur = conn.cursor()
     # Get existing spotify_playlist_id before updating
-    cur.execute("SELECT spotify_playlist_id FROM smart_playlists WHERE id=%s AND user_id=%s",
+    cur.execute("SELECT spotify_playlist_id, spotify_playlist_url FROM smart_playlists WHERE id=%s AND user_id=%s",
                 (smart_id, body.user_id))
     row = cur.fetchone()
-    existing_pid = row[0] if row else None
+    if not row:
+        cur.close(); conn.close()
+        return {"error": "Not found"}
+    existing_pid = row[0]
+    existing_url = row[1]
 
-    new_pid = body.playlist_id or existing_pid
+    new_pid = existing_pid
+    new_url = existing_url
+    sp = None
+    pending_track_ids = None
+
+    if mode == "none":
+        new_pid = None
+        new_url = None
+    elif mode == "existing":
+        if not incoming_pid:
+            cur.close(); conn.close()
+            return {"error": "Paste a Spotify playlist ID or URL, or choose Save rule only."}
+        new_pid = incoming_pid
+        new_url = make_playlist_url(new_pid)
+    elif mode == "new":
+        if body.playlist_name:
+            connq = get_conn(); curq = connq.cursor()
+            try:
+                pending_track_ids = query_track_ids(rule, body.user_id, curq)
+            except Exception as e:
+                curq.close(); connq.close(); cur.close(); conn.close()
+                if "language" in str(e).lower():
+                    return {"error": "Run POST /playlists/setup first"}
+                return {"error": f"Could not run playlist rule: {e}"}
+            curq.close(); connq.close()
+
+            sp = get_spotify()
+            me = sp.current_user()
+            pl = sp.user_playlist_create(
+                me["id"], body.playlist_name, public=False,
+                description=f"Managed by Fidolio — rule: {body.name}",
+            )
+            new_pid = pl["id"]
+            new_url = pl["external_urls"]["spotify"]
+        elif not new_pid:
+            cur.close(); conn.close()
+            return {"error": "Enter a Spotify playlist name, link an existing playlist, or save rule only."}
+
+    effective_rotation = body.rotation_enabled and bool(new_pid)
 
     cur.execute("""
         UPDATE smart_playlists
            SET name=%s, rule_json=%s,
                rotation_enabled=%s, rotation_size=%s, rotation_source=%s,
-               spotify_playlist_id=COALESCE(%s, spotify_playlist_id)
+               spotify_playlist_id=%s, spotify_playlist_url=%s
          WHERE id=%s AND user_id=%s
     """, (body.name, rule_json,
-          body.rotation_enabled, body.rotation_size, body.rotation_source,
-          body.playlist_id,
+          effective_rotation, body.rotation_size, body.rotation_source,
+          new_pid, new_url,
           smart_id, body.user_id))
     conn.commit(); cur.close(); conn.close()
 
@@ -623,22 +724,14 @@ def update_playlist(smart_id: int, body: SaveBody):
     if new_pid:
         try:
             conn2 = get_conn(); cur2 = conn2.cursor()
-            query, params = build_query(
-                body.conditions, body.excludes,
-                body.user_id, body.sort_by, body.sort_order, body.limit,
-            )
-            cur2.execute(query, params)
-            track_ids = [r[0] for r in cur2.fetchall()]
+            track_ids = pending_track_ids
+            if track_ids is None:
+                track_ids = query_track_ids(rule, body.user_id, cur2)
             cur2.close(); conn2.close()
 
-            if track_ids:
-                sp = get_spotify()
-                sp.playlist_replace_items(new_pid, [])
-                for i in range(0, len(track_ids), 100):
-                    sp.playlist_add_items(
-                        new_pid, [f"spotify:track:{t}" for t in track_ids[i:i+100]]
-                    )
-                synced = len(track_ids)
+            sp = sp or get_spotify()
+            replace_spotify_playlist(sp, new_pid, track_ids)
+            synced = len(track_ids)
 
             conn3 = get_conn(); cur3 = conn3.cursor()
             cur3.execute("UPDATE smart_playlists SET last_synced_at=NOW() WHERE id=%s", (smart_id,))
@@ -646,7 +739,7 @@ def update_playlist(smart_id: int, body: SaveBody):
         except Exception as e:
             return {"updated": True, "synced": 0, "sync_error": str(e)}
 
-    return {"updated": True, "synced": synced}
+    return {"updated": True, "synced": synced, "playlist_id": new_pid, "playlist_url": new_url}
 
 
 @router.delete("/{smart_id}")
@@ -675,14 +768,8 @@ def sync_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9
         cur.close(); conn.close(); return {"error": "No Spotify playlist linked"}
 
     rule = json.loads(rule_json)
-    query, params = build_query(
-        rule.get("conditions", []), rule.get("excludes", []),
-        uid, rule.get("sort_by", "saved_at"),
-        rule.get("sort_order", "desc"), rule.get("limit", 200),
-    )
     try:
-        cur.execute(query, params)
-        track_ids = [r[0] for r in cur.fetchall()]
+        track_ids = query_track_ids(rule, uid, cur)
     except Exception as e:
         cur.close(); conn.close()
         if "language" in str(e).lower():
@@ -690,23 +777,19 @@ def sync_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9
         raise
     cur.close(); conn.close()
 
-    if not track_ids:
-        return {"synced": 0, "message": "No matching tracks — playlist unchanged"}
-
     sp = get_spotify()
     try:
-        sp.playlist_replace_items(spotify_pid, [])
-        for i in range(0, len(track_ids), 100):
-            sp.playlist_add_items(
-                spotify_pid, [f"spotify:track:{t}" for t in track_ids[i:i+100]]
-            )
+        replace_spotify_playlist(sp, spotify_pid, track_ids)
     except Exception as e:
         return {"error": str(e)}
 
     conn2 = get_conn(); cur2 = conn2.cursor()
     cur2.execute("UPDATE smart_playlists SET last_synced_at=NOW() WHERE id=%s", (smart_id,))
     conn2.commit(); cur2.close(); conn2.close()
-    return {"synced": len(track_ids)}
+    return {
+        "synced": len(track_ids),
+        "message": "Playlist cleared because no tracks matched" if not track_ids else "Playlist synced",
+    }
 
 
 # ─── Rotate ───────────────────────────────────────────────────────────────────
