@@ -10,17 +10,19 @@ import Timeline      from "./pages/Timeline";
 import NowPlaying    from "./components/NowPlaying";
 import TimeCapsule from "./pages/TimeCapsule";
 import CollabPage from "./pages/Collab";
+import Playlists from "./pages/Playlists";
 
 const NAV_LINKS = [
-  { to: "/",          label: "Sonic Identity" },
-  { to: "/wrapped",   label: "Wrapped" },
-  { to: "/library",   label: "Library" },
-  { to: "/songs",     label: "Liked Songs" },
-  { to: "/search",    label: "Search" },
-  { to: "/discovery", label: "Discovery" },
-  { to: "/albums",    label: "Albums" },
-  { to: "/timeline",  label: "Timeline" },
-  { to: "/capsule", label: "Time Capsules" },
+  { to: "/",            label: "Sonic Identity" },
+  { to: "/wrapped",     label: "Wrapped" },
+  { to: "/library",     label: "Library" },
+  { to: "/songs",       label: "Liked Songs" },
+  { to: "/search",      label: "Search" },
+  { to: "/discovery",   label: "Discovery" },
+  { to: "/albums",      label: "Albums" },
+  { to: "/timeline",    label: "Timeline" },
+  { to: "/capsule",     label: "Time Capsules" },
+  { to: "/playlists",   label: "Playlists" },
 ];
 
 function Nav() {
@@ -71,6 +73,7 @@ export default function App() {
           <Route path="/capsule" element={<TimeCapsule />} />
           <Route path="/collab"         element={<CollabPage />} />
           <Route path="/collab/:roomId" element={<CollabPage />} />
+          <Route path="/playlists"      element={<Playlists />} />
         </Routes>
         <NowPlaying />
       </div>

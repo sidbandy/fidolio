@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import stats, library, search, discovery, nowplaying, albums, collab
+from api.routes import stats, library, search, discovery, nowplaying, albums, collab, playlists
 
 app = FastAPI(title="Fidolio API", version="1.0.0")
 
@@ -19,6 +19,7 @@ app.include_router(discovery.router,   prefix="/discovery",   tags=["discovery"]
 app.include_router(nowplaying.router,  prefix="/nowplaying",  tags=["nowplaying"])
 app.include_router(albums.router,      prefix="/albums",      tags=["albums"])
 app.include_router(collab.router,      prefix="/collab",      tags=["collab"])
+app.include_router(playlists.router,   prefix="/playlists",   tags=["playlists"])
 
 @app.get("/")
 def root():
