@@ -1,231 +1,280 @@
-import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip,
-         ResponsiveContainer, Legend, ReferenceLine } from "recharts";
+import { useEffect, useState, useCallback } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, ReferenceLine, ReferenceArea
+} from "recharts";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-const FEATURES = [
-  { key: "valence",      label: "Mood",        color: "#1db954" },
-  { key: "energy",       label: "Energy",      color: "#f59e0b" },
-  { key: "acousticness", label: "Acoustic",    color: "#6366f1" },
-  { key: "danceability", label: "Danceability",color: "#ec4899" },
-];
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background: "#111", border: "1px solid #1a1a1a",
-      borderRadius: "10px", padding: "12px 16px", fontSize: "12px" }}>
-      <div style={{ color: "#888", marginBottom: "8px", fontWeight: 600 }}>{label}</div>
-      {payload.map(p => (
-        <div key={p.dataKey} style={{ color: p.color, marginBottom: "4px" }}>
-          {p.name}: {Math.round(p.value * 100)}%
-        </div>
-      ))}
-    </div>
-  );
+const C = {
+  bg: "#080808", card: "#0e0e0e", card2: "#111111", border: "#1a1a1a",
+  green: "#1db954", greenBg: "#0d2b18", indigo: "#6366f1", amber: "#f59e0b",
+  pink: "#ec4899", red: "#ef4444", text: "#ffffff", sub: "#888888",
+  muted: "#555555", label: "#444444",
 };
 
+const FEATURES = [
+  { key: "valence",      label: "Mood",        color: C.green },
+  { key: "energy",       label: "Energy",       color: C.amber },
+  { key: "acousticness", label: "Acoustic",     color: C.indigo },
+  { key: "danceability", label: "Danceability", color: C.pink },
+];
+
+const ERA_COLORS = [
+  "#1db954", "#6366f1", "#f59e0b", "#ec4899",
+  "#3b82f6", "#10b981", "#f43434", "#a78bfa",
+];
+
+function moodColor(label) {
+  if (!label) return C.muted;
+  if (label === "Dark" || label === "Melancholic") return C.indigo;
+  if (label === "Bright" || label === "Upbeat") return C.green;
+  return C.amber;
+}
+
+function ChartTooltip({ active, payload, label, labeled_months }) {
+  if (!active || !payload?.length) return null;
+  const md = labeled_months?.find(m => m.month === label);
+  return (
+    <div style={{ background: "#111", border: `1px solid ${C.border}`, borderRadius: "10px", padding: "12px 16px", fontSize: "12px", minWidth: "160px" }}>
+      <div style={{ color: C.sub, marginBottom: "8px", fontWeight: 600 }}>
+        {label}
+        {md?.era_name && <span style={{ marginLeft: "8px", color: C.muted, fontSize: "11px", fontStyle: "italic" }}>{md.era_name}</span>}
+      </div>
+      {payload.map(p => {
+        const feat = FEATURES.find(f => f.key === p.dataKey);
+        const pct = Math.round(p.value * 100);
+        let word = "";
+        if (p.dataKey === "valence") word = md?.mood_label ? ` · ${md.mood_label}` : "";
+        if (p.dataKey === "energy") word = md?.energy_label ? ` · ${md.energy_label}` : "";
+        if (p.dataKey === "acousticness") word = md?.acoustic_label ? ` · ${md.acoustic_label}` : "";
+        return (
+          <div key={p.dataKey} style={{ color: p.stroke, marginBottom: "4px", display: "flex", justifyContent: "space-between", gap: "16px" }}>
+            <span>{feat?.label}</span>
+            <span style={{ fontWeight: 700 }}>{pct}%{word}</span>
+          </div>
+        );
+      })}
+      {md?.plays && (
+        <div style={{ color: C.label, marginTop: "8px", fontSize: "11px", borderTop: `1px solid ${C.border}`, paddingTop: "8px" }}>
+          {md.plays} plays this month
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatPill({ label, value, sub, color }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 600, color: C.label, textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
+      <div style={{ fontSize: "22px", fontWeight: 800, color: color || C.text }}>{value}</div>
+      {sub && <div style={{ fontSize: "12px", color: C.muted, marginTop: "2px" }}>{sub}</div>}
+    </div>
+  );
+}
+
+function EraBadge({ era, index, selected, onClick }) {
+  const isSel = selected === era.name;
+  const color = ERA_COLORS[index % ERA_COLORS.length];
+  return (
+    <button onClick={() => onClick(isSel ? null : era.name)} style={{
+      padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+      fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
+      background: isSel ? color : C.card2,
+      color: isSel ? "#000" : C.muted,
+      outline: isSel ? `1px solid ${color}` : "none",
+    }}>
+      {era.name}
+      <span style={{ marginLeft: "6px", opacity: 0.6, fontWeight: 400 }}>
+        {era.months.length === 1 ? era.start : `${era.start} – ${era.end}`}
+      </span>
+    </button>
+  );
+}
+
 export default function Timeline() {
-  const [data,    setData]    = useState(null);
-  const [active,  setActive]  = useState(["valence","energy"]);
+  const [insights, setInsights] = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [active, setActive]     = useState(["valence", "energy"]);
+  const [selEra, setSelEra]     = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/stats/taste-timeline`)
+    fetch(`${API}/stats/taste-timeline-insights`)
       .then(r => r.json())
-      .then(setData);
+      .then(ins => { setInsights(ins); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
-  const toggle = (key) => {
-    setActive(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
+  const toggleFeature = useCallback((key) => {
+    setActive(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  }, []);
 
-  if (!data) return <div className="loading">Analyzing your taste timeline...</div>;
-
-  const timeline = data.timeline;
-
-  if (timeline.length < 2) {
+  if (loading) {
     return (
-      <div style={{ padding: "40px", maxWidth: "900px", margin: "0 auto" }}>
-        <h1 style={{ fontSize: "36px", fontWeight: 800, color: "#1db954", marginBottom: "8px" }}>
-          Taste Timeline
-        </h1>
-        <div className="card" style={{ textAlign: "center", padding: "60px", color: "#555" }}>
-          <div style={{ fontSize: "32px", marginBottom: "16px" }}>📈</div>
-          <div style={{ fontSize: "16px", marginBottom: "8px" }}>Not enough data yet.</div>
-          <div style={{ fontSize: "13px", color: "#444" }}>
-            Keep the poller running — this page gets more interesting every week.
-            You need at least 2 months of listening history.
+      <div style={{ padding: "40px", maxWidth: "1000px", margin: "0 auto" }}>
+        <div style={{ color: C.muted, fontSize: "14px" }}>Analyzing your taste timeline...</div>
+      </div>
+    );
+  }
+
+  if (!insights?.enough_data) {
+    const have = insights?.months_have ?? 0;
+    const needed = insights?.months_needed ?? 2;
+    return (
+      <div style={{ padding: "40px 24px 100px", maxWidth: "1000px", margin: "0 auto" }}>
+        <h1 style={{ fontSize: "32px", fontWeight: 800, color: C.text, marginBottom: "6px" }}>Taste Timeline</h1>
+        <p style={{ color: C.muted, fontSize: "14px", marginBottom: "40px" }}>How your music has changed over time.</p>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "14px", padding: "48px 32px", textAlign: "center" }}>
+          <div style={{ fontSize: "36px", marginBottom: "16px" }}>📈</div>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: C.text, marginBottom: "8px" }}>
+            {have === 0 ? "No listening history yet" : `${have} of ${needed} months collected`}
+          </div>
+          <div style={{ fontSize: "13px", color: C.muted, maxWidth: "360px", margin: "0 auto" }}>
+            {have === 0
+              ? "Make sure the poller is running. It collects your listening history every 30 minutes."
+              : `You need at least ${needed} months of data. Keep the poller running and check back soon.`}
+          </div>
+          <div style={{ marginTop: "24px", display: "inline-block", background: C.card2, border: `1px solid ${C.border}`, borderRadius: "8px", padding: "10px 20px", fontFamily: "monospace", fontSize: "13px", color: C.sub }}>
+            python scripts/poller.py
           </div>
         </div>
       </div>
     );
   }
 
-  // Find biggest mood shift between consecutive months
-  let biggestShift = null;
-  for (let i = 1; i < timeline.length; i++) {
-    const prev = timeline[i-1];
-    const curr = timeline[i];
-    if (!prev.valence || !curr.valence) continue;
-    const shift = Math.abs(curr.valence - prev.valence);
-    if (!biggestShift || shift > biggestShift.shift) {
-      biggestShift = {
-        month: curr.month,
-        shift: shift,
-        direction: curr.valence > prev.valence ? "brighter" : "darker",
-        from: Math.round(prev.valence * 100),
-        to: Math.round(curr.valence * 100),
-      };
-    }
-  }
-
-  const first = timeline[0];
-  const last  = timeline[timeline.length - 1];
-  const moodDrift = last.valence && first.valence
-    ? Math.round((last.valence - first.valence) * 100)
-    : null;
-  const energyDrift = last.energy && first.energy
-    ? Math.round((last.energy - first.energy) * 100)
-    : null;
+  const selectedEraObj = selEra ? insights.eras.find(e => e.name === selEra) : null;
+  const moodDriftColor  = (insights.mood_drift ?? 0) > 0 ? C.green : C.indigo;
+  const energyDriftColor = (insights.energy_drift ?? 0) > 0 ? C.amber : C.indigo;
 
   return (
-    <div style={{ padding: "40px", maxWidth: "1000px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "36px", fontWeight: 800, color: "#1db954", marginBottom: "8px" }}>
-        Taste Timeline
-      </h1>
-      <p style={{ color: "#555", fontSize: "15px", marginBottom: "36px" }}>
-        How your music has actually changed over {timeline.length} months of listening.
-      </p>
+    <div style={{ padding: "40px 24px 100px", maxWidth: "1040px", margin: "0 auto" }}>
 
-      {/* Insight cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-        gap: "16px", marginBottom: "32px" }}>
+      <h1 style={{ fontSize: "32px", fontWeight: 800, color: C.text, margin: "0 0 12px 0" }}>Taste Timeline</h1>
 
-        {moodDrift !== null && (
-          <div className="card" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 800,
-              color: moodDrift > 0 ? "#1db954" : "#6366f1" }}>
-              {moodDrift > 0 ? "+" : ""}{moodDrift}%
-            </div>
-            <div className="label" style={{ marginTop: "6px" }}>Mood drift overall</div>
-            <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>
-              Your music got {moodDrift > 0 ? "happier" : "darker"} over time
-            </div>
-          </div>
-        )}
-
-        {energyDrift !== null && (
-          <div className="card" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 800,
-              color: energyDrift > 0 ? "#f59e0b" : "#6366f1" }}>
-              {energyDrift > 0 ? "+" : ""}{energyDrift}%
-            </div>
-            <div className="label" style={{ marginTop: "6px" }}>Energy drift overall</div>
-            <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>
-              Your music got {energyDrift > 0 ? "more intense" : "more mellow"} over time
-            </div>
-          </div>
-        )}
-
-        {biggestShift && (
-          <div className="card" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "20px", fontWeight: 800, color: "#fff" }}>
-              {biggestShift.month}
-            </div>
-            <div className="label" style={{ marginTop: "6px" }}>Biggest mood shift</div>
-            <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>
-              Mood went {biggestShift.direction} — {biggestShift.from}% → {biggestShift.to}%
-            </div>
+      {/* Narrative card */}
+      <div style={{ marginBottom: "32px", background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "16px 20px", borderLeft: `3px solid ${C.green}` }}>
+        <div style={{ fontSize: "11px", fontWeight: 600, color: C.sub, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+          Your Story · {insights.total_months} months
+        </div>
+        <div style={{ fontSize: "14px", color: C.text, lineHeight: "1.6" }}>{insights.narrative}</div>
+        {insights.current_chapter && (
+          <div style={{ marginTop: "10px", fontSize: "12px", color: C.muted }}>
+            Current chapter: <span style={{ color: C.green, fontWeight: 600 }}>{insights.current_chapter}</span>
           </div>
         )}
       </div>
 
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "28px" }}>
+        {insights.mood_drift !== null && (
+          <StatPill label="Mood drift" value={`${insights.mood_drift > 0 ? "+" : ""}${insights.mood_drift}%`}
+            sub={insights.mood_drift > 0 ? "Getting brighter" : "Getting darker"} color={moodDriftColor} />
+        )}
+        {insights.energy_drift !== null && (
+          <StatPill label="Energy drift" value={`${insights.energy_drift > 0 ? "+" : ""}${insights.energy_drift}%`}
+            sub={insights.energy_drift > 0 ? "More intense over time" : "More mellow over time"} color={energyDriftColor} />
+        )}
+        {insights.biggest_mood_shift && (
+          <StatPill label="Biggest mood shift" value={insights.biggest_mood_shift.month}
+            sub={`${insights.biggest_mood_shift.from_label} → ${insights.biggest_mood_shift.to_label}`} color={C.text} />
+        )}
+        {insights.biggest_energy_shift && (
+          <StatPill label="Biggest energy shift" value={insights.biggest_energy_shift.month}
+            sub={`${insights.biggest_energy_shift.from_label} → ${insights.biggest_energy_shift.to_label}`} color={C.text} />
+        )}
+      </div>
+
+      {/* Era chips */}
+      {insights.eras.length > 1 && (
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: C.label, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "10px" }}>
+            Your listening eras — click to highlight
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {insights.eras.map((era, i) => (
+              <EraBadge key={era.name + era.start} era={era} index={i} selected={selEra} onClick={setSelEra} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Feature toggles */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
         {FEATURES.map(f => (
-          <button key={f.key} onClick={() => toggle(f.key)} style={{
+          <button key={f.key} onClick={() => toggleFeature(f.key)} style={{
             padding: "6px 16px", borderRadius: "16px", border: "none",
-            background: active.includes(f.key) ? f.color : "#1a1a1a",
-            color: active.includes(f.key) ? "#000" : "#666",
-            fontWeight: 600, fontSize: "13px", cursor: "pointer",
-            transition: "all 0.15s"
+            background: active.includes(f.key) ? f.color : C.card2,
+            color: active.includes(f.key) ? "#000" : C.muted,
+            fontWeight: 600, fontSize: "13px", cursor: "pointer", transition: "all 0.15s"
           }}>
             {f.label}
           </button>
         ))}
       </div>
 
-      {/* Main chart */}
-      <div className="card" style={{ marginBottom: "32px" }}>
-        <div className="label" style={{ marginBottom: "20px" }}>
-          Audio features over time — monthly averages from your listening history
-        </div>
-        <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={timeline} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-            <XAxis dataKey="month" tick={{ fill: "#444", fontSize: 11 }}
-              tickFormatter={m => m.slice(2)} />
-            <YAxis domain={[0, 1]} tick={{ fill: "#444", fontSize: 11 }}
-              tickFormatter={v => `${Math.round(v * 100)}%`} />
-            <Tooltip content={<CustomTooltip />} />
+      {/* Chart */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "14px", padding: "24px 16px 16px", marginBottom: "28px" }}>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={insights.labeled_months} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+            <XAxis dataKey="month" tick={{ fill: C.label, fontSize: 11 }} tickFormatter={m => m.slice(2)} axisLine={{ stroke: C.border }} tickLine={false} />
+            <YAxis domain={[0, 1]} tick={{ fill: C.label, fontSize: 11 }} tickFormatter={v => `${Math.round(v * 100)}%`} axisLine={false} tickLine={false} />
+            <Tooltip content={<ChartTooltip labeled_months={insights.labeled_months} />} />
+            {selectedEraObj && selectedEraObj.months.length >= 1 && (
+              <ReferenceArea x1={selectedEraObj.months[0]} x2={selectedEraObj.months[selectedEraObj.months.length - 1]} strokeOpacity={0} fill="#ffffff" fillOpacity={0.04} />
+            )}
+            {insights.biggest_mood_shift && (
+              <ReferenceLine x={insights.biggest_mood_shift.month} stroke="#ffffff18" strokeDasharray="4 4" />
+            )}
             {FEATURES.filter(f => active.includes(f.key)).map(f => (
-              <Line key={f.key} type="monotone" dataKey={f.key}
-                stroke={f.color} strokeWidth={2} dot={false}
+              <Line key={f.key} type="monotone" dataKey={f.key} stroke={f.color} strokeWidth={2}
+                dot={{ r: 3, fill: f.color, strokeWidth: 0 }} activeDot={{ r: 5, fill: f.color, strokeWidth: 0 }}
                 name={f.label} connectNulls />
             ))}
-            {biggestShift && (
-              <ReferenceLine x={biggestShift.month}
-                stroke="#ffffff22" strokeDasharray="4 4"
-                label={{ value: "↑ shift", fill: "#444", fontSize: 10 }} />
-            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Monthly breakdown table */}
-      <div className="card">
-        <div className="label" style={{ marginBottom: "16px" }}>Monthly breakdown</div>
+      {/* Monthly table */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "14px", overflow: "hidden" }}>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, fontSize: "11px", fontWeight: 600, color: C.label, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Monthly breakdown
+        </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid #1a1a1a" }}>
-                {["Month","Plays","Mood","Energy","Acoustic","Dance","BPM"].map(h => (
-                  <th key={h} style={{ textAlign: "left", padding: "8px 12px",
-                    color: "#444", fontWeight: 600, fontSize: "11px",
-                    textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    {h}
-                  </th>
+              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                {["Month","Vibe","Mood","Energy","Acoustic","Dance","BPM","Plays"].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "10px 14px", color: C.label, fontWeight: 600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {[...timeline].reverse().map((row, i) => (
-                <tr key={row.month} style={{
-                  borderBottom: "1px solid #111",
-                  background: i % 2 === 0 ? "transparent" : "#0a0a0a"
-                }}>
-                  <td style={{ padding: "8px 12px", fontWeight: 600 }}>{row.month}</td>
-                  <td style={{ padding: "8px 12px", color: "#555" }}>{row.plays}</td>
-                  <td style={{ padding: "8px 12px",
-                    color: row.valence < 0.3 ? "#6366f1" : row.valence > 0.6 ? "#1db954" : "#f59e0b" }}>
-                    {row.valence ? `${Math.round(row.valence * 100)}%` : "—"}
-                  </td>
-                  <td style={{ padding: "8px 12px", color: "#f59e0b" }}>
-                    {row.energy ? `${Math.round(row.energy * 100)}%` : "—"}
-                  </td>
-                  <td style={{ padding: "8px 12px", color: "#6366f1" }}>
-                    {row.acousticness ? `${Math.round(row.acousticness * 100)}%` : "—"}
-                  </td>
-                  <td style={{ padding: "8px 12px", color: "#ec4899" }}>
-                    {row.danceability ? `${Math.round(row.danceability * 100)}%` : "—"}
-                  </td>
-                  <td style={{ padding: "8px 12px", color: "#888" }}>
-                    {row.tempo ? Math.round(row.tempo) : "—"}
-                  </td>
-                </tr>
-              ))}
+              {[...insights.labeled_months].reverse().map((row, i) => {
+                const isHl = selectedEraObj?.months.includes(row.month);
+                return (
+                  <tr key={row.month} style={{ borderBottom: `1px solid ${C.border}`, background: isHl ? "#ffffff06" : i % 2 === 0 ? "transparent" : "#0a0a0a", transition: "background 0.15s" }}>
+                    <td style={{ padding: "10px 14px", fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{row.month}</td>
+                    <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#000", background: moodColor(row.mood_label), borderRadius: "10px", padding: "2px 8px" }}>
+                        {row.era_name || "—"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 14px", color: moodColor(row.mood_label), fontWeight: 600 }}>
+                      {row.mood_label || "—"}
+                      {row.mood_pct != null && <span style={{ color: C.muted, fontWeight: 400, marginLeft: "4px" }}>{row.mood_pct}%</span>}
+                    </td>
+                    <td style={{ padding: "10px 14px", color: C.amber, fontWeight: 600 }}>
+                      {row.energy_label || "—"}
+                      {row.energy_pct != null && <span style={{ color: C.muted, fontWeight: 400, marginLeft: "4px" }}>{row.energy_pct}%</span>}
+                    </td>
+                    <td style={{ padding: "10px 14px", color: C.indigo }}>{row.acoustic_label || "—"}</td>
+                    <td style={{ padding: "10px 14px", color: C.pink }}>{row.danceability != null ? `${Math.round(row.danceability * 100)}%` : "—"}</td>
+                    <td style={{ padding: "10px 14px", color: C.sub }}>{row.tempo != null ? Math.round(row.tempo) : "—"}</td>
+                    <td style={{ padding: "10px 14px", color: C.muted }}>{row.plays}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

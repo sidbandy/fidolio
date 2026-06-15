@@ -55,6 +55,22 @@ def get_spotify():
     ))
 
 
+def spotify_error(e: Exception) -> str:
+    """Convert a Spotify exception to a human-readable error string."""
+    msg = str(e)
+    if "403" in msg or "Forbidden" in msg:
+        return (
+            "Spotify returned 403 — the stored token is missing playlist scopes. "
+            "Run: python scripts/reauth.py  (open the printed URL in incognito, "
+            "approve, paste the redirect URL back). Then retry."
+        )
+    if "401" in msg or "Unauthorized" in msg or "token" in msg.lower():
+        return "Spotify token expired. Run: python scripts/reauth.py"
+    if "404" in msg:
+        return "Spotify playlist not found. Check the playlist ID."
+    return f"Spotify error: {msg}"
+
+
 def normalize_playlist_id(value: Optional[str]) -> Optional[str]:
     """Accept a Spotify playlist ID, URL, or URI and return the bare ID."""
     if not value:
@@ -316,13 +332,14 @@ class PreviewBody(BaseModel):
     user_id:     str  = "0tz6fep2m5bx1vq85g48518u9"
 
 class SaveBody(PreviewBody):
-    name:             str
-    spotify_mode:     str = "new"              # new | existing | none | keep
-    playlist_name:    Optional[str] = None   # create new Spotify playlist with this name
-    playlist_id:      Optional[str] = None   # OR link to existing playlist
-    rotation_enabled: bool = False
-    rotation_size:    int  = 5
-    rotation_source:  str  = "library"       # library | similar | discover
+    name:                 str
+    spotify_mode:         str = "new"          # new | existing | none | keep
+    playlist_name:        Optional[str] = None
+    playlist_id:          Optional[str] = None
+    rotation_enabled:     bool = False
+    rotation_size:        int  = 5
+    rotation_source:      str  = "library"     # library | similar | discover
+    rotation_interval_days: int = 7            # how often to auto-rotate
 
 class RotateBody(BaseModel):
     user_id:         str           = "0tz6fep2m5bx1vq85g48518u9"
@@ -572,11 +589,12 @@ def create_playlist(body: SaveBody):
         return {"error": "Enter a Spotify playlist name, or choose Save rule only."}
 
     rule = {
-        "conditions": body.conditions,
-        "excludes":   body.excludes,
-        "sort_by":    body.sort_by,
-        "sort_order": body.sort_order,
-        "limit":      body.limit,
+        "conditions":            body.conditions,
+        "excludes":              body.excludes,
+        "sort_by":               body.sort_by,
+        "sort_order":            body.sort_order,
+        "limit":                 body.limit,
+        "rotation_interval_days": body.rotation_interval_days,
     }
     rule_json = json.dumps(rule)
 
@@ -592,14 +610,17 @@ def create_playlist(body: SaveBody):
         cur0.close(); conn0.close()
 
     if mode == "new" and body.playlist_name:
-        sp          = get_spotify()
-        me          = sp.current_user()
-        pl          = sp.user_playlist_create(
-            me["id"], body.playlist_name, public=False,
-            description=f"Managed by Fidolio — rule: {body.name}",
-        )
-        playlist_id  = pl["id"]
-        playlist_url = pl["external_urls"]["spotify"]
+        try:
+            sp          = get_spotify()
+            me          = sp.current_user()
+            pl          = sp.user_playlist_create(
+                me["id"], body.playlist_name, public=False,
+                description=f"Managed by Fidolio — rule: {body.name}",
+            )
+            playlist_id  = pl["id"]
+            playlist_url = pl["external_urls"]["spotify"]
+        except Exception as e:
+            return {"error": spotify_error(e)}
     elif playlist_id:
         playlist_url = make_playlist_url(playlist_id)
 
@@ -628,7 +649,7 @@ def create_playlist(body: SaveBody):
                 "id": new_id,
                 "playlist_id": playlist_id,
                 "playlist_url": playlist_url,
-                "error": f"Rule saved, but Spotify sync failed: {e}",
+                "error": spotify_error(e),
             }
 
         conn3 = get_conn(); cur3 = conn3.cursor()
@@ -651,9 +672,12 @@ def update_playlist(smart_id: int, body: SaveBody):
     mode = (body.spotify_mode or "keep").lower()
     incoming_pid = normalize_playlist_id(body.playlist_id)
     rule = {
-        "conditions": body.conditions, "excludes":   body.excludes,
-        "sort_by":    body.sort_by,    "sort_order": body.sort_order,
-        "limit":      body.limit,
+        "conditions":            body.conditions,
+        "excludes":              body.excludes,
+        "sort_by":               body.sort_by,
+        "sort_order":            body.sort_order,
+        "limit":                 body.limit,
+        "rotation_interval_days": body.rotation_interval_days,
     }
     rule_json = json.dumps(rule)
     conn = get_conn(); cur = conn.cursor()
@@ -777,11 +801,11 @@ def sync_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9
         raise
     cur.close(); conn.close()
 
-    sp = get_spotify()
     try:
+        sp = get_spotify()
         replace_spotify_playlist(sp, spotify_pid, track_ids)
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": spotify_error(e)}
 
     conn2 = get_conn(); cur2 = conn2.cursor()
     cur2.execute("UPDATE smart_playlists SET last_synced_at=NOW() WHERE id=%s", (smart_id,))
@@ -823,11 +847,11 @@ def rotate_playlist(smart_id: int, body: RotateBody):
         cur.close(); conn.close(); return {"error": "No Spotify playlist linked"}
     cur.close(); conn.close()
 
-    sp = get_spotify()
     try:
+        sp = get_spotify()
         current_tracks = fetch_spotify_tracks(sp, spotify_pid)
     except Exception as e:
-        return {"error": f"Could not read playlist: {e}"}
+        return {"error": spotify_error(e)}
 
     if len(current_tracks) <= rot_size:
         return {"error": f"Playlist has {len(current_tracks)} tracks — need > {rot_size} to rotate"}
@@ -935,12 +959,15 @@ def rotate_playlist(smart_id: int, body: RotateBody):
 
     replacements = unique[:rot_size]
 
-    sp.playlist_remove_all_occurrences_of_items(
-        spotify_pid, [f"spotify:track:{t}" for t in eject_ids]
-    )
-    sp.playlist_add_items(
-        spotify_pid, [f"spotify:track:{r}" for r in replacements]
-    )
+    try:
+        sp.playlist_remove_all_occurrences_of_items(
+            spotify_pid, [f"spotify:track:{t}" for t in eject_ids]
+        )
+        sp.playlist_add_items(
+            spotify_pid, [f"spotify:track:{r}" for r in replacements]
+        )
+    except Exception as e:
+        return {"error": spotify_error(e)}
 
     conn3 = get_conn(); cur3 = conn3.cursor()
     added_names = []
@@ -956,4 +983,113 @@ def rotate_playlist(smart_id: int, body: RotateBody):
         "rotation_source": rot_source,
         "removed":         eject_names,
         "added":           added_names,
+    }
+
+
+# ─── Auto-rotation scheduler endpoints ───────────────────────────────────────
+
+@router.get("/rotation-due")
+def rotation_due(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""
+        SELECT id, name, spotify_playlist_id, rotation_size,
+               rotation_source, last_rotated_at, rule_json
+          FROM smart_playlists
+         WHERE user_id = %s AND rotation_enabled = TRUE
+           AND spotify_playlist_id IS NOT NULL
+    """, (user_id,))
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    due = []
+    for r in rows:
+        pid, name, spid, rot_size, rot_source, last_rotated, rule_json_str = r
+        try:
+            rule = json.loads(rule_json_str or "{}")
+        except Exception:
+            rule = {}
+        interval_days = rule.get("rotation_interval_days", 7)
+        if last_rotated is None:
+            days_since = None
+            is_due = True
+        else:
+            lr = last_rotated.replace(tzinfo=timezone.utc) if last_rotated.tzinfo is None else last_rotated
+            days_since = (now - lr).days
+            is_due = days_since >= interval_days
+        if is_due:
+            due.append({
+                "id": pid, "name": name, "spotify_playlist_id": spid,
+                "rotation_size": rot_size or 5, "rotation_source": rot_source or "library",
+                "last_rotated_at": str(last_rotated)[:16] if last_rotated else None,
+                "days_since": days_since, "interval_days": interval_days,
+            })
+    return {"due": due, "count": len(due)}
+
+
+@router.post("/run-auto-rotations")
+def run_auto_rotations(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+    due_resp = rotation_due(user_id=user_id)
+    due_list = due_resp.get("due", [])
+    if not due_list:
+        return {"message": "No playlists due for rotation", "results": []}
+    results = []
+    for pl in due_list:
+        body = RotateBody(
+            user_id=user_id,
+            rotation_size=pl["rotation_size"],
+            rotation_source=pl["rotation_source"],
+        )
+        try:
+            result = rotate_playlist(pl["id"], body)
+            if "error" in result:
+                results.append({"id": pl["id"], "name": pl["name"], "status": "error", "error": result["error"]})
+            else:
+                results.append({"id": pl["id"], "name": pl["name"], "status": "rotated",
+                    "rotated": result["rotated"], "removed": result["removed"], "added": result["added"]})
+        except Exception as e:
+            results.append({"id": pl["id"], "name": pl["name"], "status": "error", "error": str(e)})
+    ok  = [r for r in results if r["status"] == "rotated"]
+    err = [r for r in results if r["status"] == "error"]
+    return {"message": f"Rotated {len(ok)} playlist(s), {len(err)} error(s)",
+            "results": results, "ok_count": len(ok), "err_count": len(err)}
+
+
+@router.get("/{smart_id}/rotation-status")
+def rotation_status(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""
+        SELECT rotation_enabled, rotation_size, rotation_source,
+               last_rotated_at, rule_json
+          FROM smart_playlists WHERE id = %s AND user_id = %s
+    """, (smart_id, user_id))
+    row = cur.fetchone()
+    cur.close(); conn.close()
+    if not row:
+        return {"error": "Not found"}
+    enabled, rot_size, rot_source, last_rotated, rule_json_str = row
+    if not enabled:
+        return {"rotation_enabled": False}
+    try:
+        rule = json.loads(rule_json_str or "{}")
+    except Exception:
+        rule = {}
+    interval_days = rule.get("rotation_interval_days", 7)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if last_rotated is None:
+        days_since = None; days_until = 0; is_due = True
+        status_text = "Never rotated — ready now"
+    else:
+        lr = last_rotated.replace(tzinfo=timezone.utc) if last_rotated.tzinfo is None else last_rotated
+        days_since = (now - lr).days
+        days_until = max(0, interval_days - days_since)
+        is_due = days_until == 0
+        status_text = "Rotation due now" if is_due else ("Rotates tomorrow" if days_until == 1 else f"Rotates in {days_until} days")
+    return {
+        "rotation_enabled": True, "rotation_size": rot_size or 5,
+        "rotation_source": rot_source or "library", "interval_days": interval_days,
+        "last_rotated_at": str(last_rotated)[:16] if last_rotated else None,
+        "days_since": days_since, "days_until": days_until,
+        "is_due": is_due, "status_text": status_text,
     }

@@ -53,7 +53,8 @@ const btn = (variant = "primary", extra = {}) => {
 const input = (extra = {}) => ({
   background: "#111", border: `1px solid ${C.border}`,
   borderRadius: "8px", padding: "8px 12px", color: "#fff",
-  fontSize: "13px", outline: "none", ...extra,
+  fontSize: "13px", outline: "none", boxSizing: "border-box",
+  maxWidth: "100%", ...extra,
 });
 
 // ─── Condition field definitions ─────────────────────────────────────────────
@@ -150,8 +151,9 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
 
   return (
     <div style={{ display: "flex", gap: "8px", alignItems: "center",
-      padding: "10px 12px", background: C.card2,
-      borderRadius: "9px", border: `1px solid ${C.border}` }}>
+      flexWrap: "wrap", padding: "10px 12px", background: C.card2,
+      borderRadius: "9px", border: `1px solid ${C.border}`,
+      boxSizing: "border-box", maxWidth: "100%" }}>
 
       {/* Exclude / include indicator */}
       <span style={{ fontSize: "11px", fontWeight: 700,
@@ -167,7 +169,7 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
           onChange({ field: e.target.value, op: newOps[0].value,
             value: defaultValueFor(f) });
         }}
-        style={{ ...input(), flex: "0 0 auto", minWidth: "140px" }}>
+        style={{ ...input(), flex: "1 1 120px", minWidth: "110px" }}>
         {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select>
 
@@ -180,7 +182,7 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
             : Array.isArray(cond.value) ? defaultValueFor(fieldDef) : cond.value;
           onChange({ ...cond, op: newOp, value: val });
         }}
-        style={{ ...input(), flex: "0 0 auto", minWidth: "110px" }}>
+        style={{ ...input(), flex: "0 1 90px", minWidth: "70px" }}>
         {ops.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
 
@@ -481,32 +483,96 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
 }
 
 // ─── Saved playlist card ──────────────────────────────────────────────────────
-function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, syncing, rotating }) {
-  const rule = pl.rule || {};
+function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, onSaved, syncing, rotating }) {
+  const [showRotSettings, setShowRotSettings] = useState(false);
+  const [rotInterval, setRotInterval]         = useState(pl.rule?.rotation_interval_days || 7);
+  const [rotSize,     setRotSize]             = useState(pl.rotation_size   || 5);
+  const [rotSource,   setRotSource]           = useState(pl.rotation_source || "library");
+  const [savingRot,   setSavingRot]           = useState(false);
+
+  const rule  = pl.rule || {};
   const conds = rule.conditions || [];
-  const excls = rule.excludes || [];
+  const excls = rule.excludes   || [];
 
   const condLabel = (c) => {
-    if (c.field === "language") return `Language = ${c.value}`;
-    if (c.field === "mood")     return `Mood = ${c.value}`;
-    if (c.field === "decade")   return `Decade = ${c.value}`;
+    if (c.field === "language")   return `Language = ${c.value}`;
+    if (c.field === "mood")       return `Mood = ${c.value}`;
+    if (c.field === "decade")     return `Decade = ${c.value}`;
     if (c.field === "saved_days") return `Saved last ${c.value} days`;
-    if (c.field === "artist")   return `Artist ${c.op === "contains" ? "contains" : "="} ${c.value}`;
+    if (c.field === "artist")     return `Artist ${c.op === "contains" ? "contains" : "="} ${c.value}`;
     const label = FIELDS.find(f => f.value === c.field)?.label || c.field;
-    if (c.op === "between" && Array.isArray(c.value))
-      return `${label} ${c.value[0]}–${c.value[1]}`;
+    if (c.op === "between" && Array.isArray(c.value)) return `${label} ${c.value[0]}–${c.value[1]}`;
     const opLabel = { gte: "≥", lte: "≤", eq: "=" }[c.op] || c.op;
     return `${label} ${opLabel} ${c.value}`;
   };
 
+  const rotStatus = (() => {
+    if (!pl.rotation_enabled) return null;
+    if (!pl.last_rotated_at)  return { text: "Never rotated — due now", due: true };
+    const days  = Math.floor((new Date() - new Date(pl.last_rotated_at)) / 86400000);
+    const until = Math.max(0, rotInterval - days);
+    if (until === 0) return { text: "Rotation due now",  due: true };
+    if (until === 1) return { text: "Rotates tomorrow",  due: false };
+    return { text: `Rotates in ${until} days`, due: false };
+  })();
+
+  const saveRotationSettings = async () => {
+    setSavingRot(true);
+    try {
+      const existingRule = pl.rule || {};
+      await fetch(`${API}/playlists/${pl.id}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:             pl.name,
+          spotify_mode:     pl.spotify_playlist_id ? "existing" : "none",
+          playlist_id:      pl.spotify_playlist_id || null,
+          conditions:       existingRule.conditions || [],
+          excludes:         existingRule.excludes   || [],
+          sort_by:          existingRule.sort_by    || "saved_at",
+          sort_order:       existingRule.sort_order || "desc",
+          limit:            existingRule.limit      || 200,
+          rotation_enabled:       pl.rotation_enabled,
+          rotation_size:          rotSize,
+          rotation_source:        rotSource,
+          rotation_interval_days: rotInterval,
+        }),
+      });
+      setShowRotSettings(false);
+      if (onSaved) onSaved();
+    } finally {
+      setSavingRot(false);
+    }
+  };
+
+  const SOURCE_OPTS = [
+    { v: "library",  label: "Library",         sub: "Re-run your rule, pull fresh library tracks" },
+    { v: "similar",  label: "Similar Artists", sub: "Last.fm neighbours from your library" },
+    { v: "discover", label: "Discover",        sub: "ReccoBeats picks seeded from playlist" },
+  ];
+  const INTERVAL_OPTS = [
+    { value: 1,  label: "Daily"        },
+    { value: 3,  label: "Every 3 days" },
+    { value: 7,  label: "Weekly"       },
+    { value: 14, label: "Biweekly"     },
+    { value: 30, label: "Monthly"      },
+  ];
+
   return (
     <div style={{ ...card(), position: "relative" }}>
+
       <div style={{ display: "flex", justifyContent: "space-between",
         alignItems: "flex-start", marginBottom: "10px" }}>
-
         <div>
-          <div style={{ fontSize: "15px", fontWeight: 800, color: "#fff" }}>
-            {pl.name}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#fff" }}>{pl.name}</div>
+            {rotStatus && (
+              <span style={{
+                width: "7px", height: "7px", borderRadius: "50%", display: "inline-block",
+                background: rotStatus.due ? C.amber : C.green,
+                boxShadow: rotStatus.due ? `0 0 6px ${C.amber}` : "none", flexShrink: 0,
+              }} title={rotStatus.text} />
+            )}
           </div>
           {pl.spotify_playlist_url && (
             <a href={pl.spotify_playlist_url} target="_blank" rel="noreferrer"
@@ -515,13 +581,9 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, syncing, rotating }
             </a>
           )}
         </div>
-
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap",
-          justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button onClick={() => onEdit(pl)}
-            style={btn("ghost", { fontSize: "11px", padding: "5px 10px" })}>
-            Edit
-          </button>
+            style={btn("ghost", { fontSize: "11px", padding: "5px 10px" })}>Edit</button>
           {pl.spotify_playlist_id && (
             <>
               <button onClick={() => onSync(pl.id)} disabled={syncing === pl.id}
@@ -530,156 +592,245 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, syncing, rotating }
                 {syncing === pl.id ? "Syncing..." : "Sync Now"}
               </button>
               <button onClick={() => onRotate(pl)} disabled={rotating === pl.id}
-                style={btn("primary", { fontSize: "11px", padding: "5px 10px",
-                  opacity: rotating === pl.id ? 0.5 : 1 })}>
-                {rotating === pl.id ? "Rotating..." : `Rotate (${pl.rotation_size || 5})`}
+                style={btn(rotStatus?.due ? "primary" : "ghost", {
+                  fontSize: "11px", padding: "5px 10px",
+                  opacity: rotating === pl.id ? 0.5 : 1,
+                  ...(rotStatus?.due ? { boxShadow: `0 0 10px ${C.green}55` } : {}),
+                })}>
+                {rotating === pl.id ? "Rotating..." : `↻ Rotate${rotStatus?.due ? " (due)" : ""}`}
               </button>
             </>
           )}
           <button onClick={() => onDelete(pl.id)}
-            style={btn("danger", { fontSize: "11px", padding: "5px 10px" })}>
-            Delete
-          </button>
+            style={btn("danger", { fontSize: "11px", padding: "5px 10px" })}>Delete</button>
         </div>
       </div>
 
-      {/* Conditions summary */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px",
-        marginBottom: "10px" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
         {conds.map((c, i) => (
-          <span key={i} style={{ fontSize: "11px", color: C.sub,
-            background: "#151515", padding: "3px 9px",
-            borderRadius: "10px", border: `1px solid ${C.border}` }}>
+          <span key={i} style={{ fontSize: "11px", color: C.sub, background: "#151515",
+            padding: "3px 9px", borderRadius: "10px", border: `1px solid ${C.border}` }}>
             {condLabel(c)}
           </span>
         ))}
         {excls.map((c, i) => (
-          <span key={i} style={{ fontSize: "11px", color: C.red,
-            background: "#1a0808", padding: "3px 9px",
-            borderRadius: "10px", border: "1px solid #3a1a1a" }}>
+          <span key={i} style={{ fontSize: "11px", color: C.red, background: "#1a0808",
+            padding: "3px 9px", borderRadius: "10px", border: "1px solid #3a1a1a" }}>
             ✕ {condLabel(c)}
           </span>
         ))}
       </div>
 
-      {/* Meta row */}
-      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
-        {pl.rotation_enabled && (
-          <span style={{ fontSize: "11px", color: C.green }}>
-            ↻ Rotation {pl.rotation_source}
+      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "center" }}>
+        {rotStatus ? (
+          <span style={{ fontSize: "11px", color: rotStatus.due ? C.amber : C.green, fontWeight: 600 }}>
+            ↻ {rotStatus.text}
           </span>
-        )}
+        ) : pl.rotation_enabled ? (
+          <span style={{ fontSize: "11px", color: C.green }}>↻ Auto-rotation on</span>
+        ) : null}
         {pl.last_synced_at && (
-          <span style={{ fontSize: "11px", color: C.muted }}>
-            Synced {pl.last_synced_at}
-          </span>
+          <span style={{ fontSize: "11px", color: C.muted }}>Synced {pl.last_synced_at}</span>
         )}
         {pl.last_rotated_at && (
-          <span style={{ fontSize: "11px", color: C.muted }}>
-            Rotated {pl.last_rotated_at}
-          </span>
+          <span style={{ fontSize: "11px", color: C.muted }}>Last rotated {pl.last_rotated_at}</span>
         )}
-        <span style={{ fontSize: "11px", color: C.label }}>
-          Created {pl.created_at}
-        </span>
+        <span style={{ fontSize: "11px", color: C.label }}>Created {pl.created_at}</span>
+        {pl.rotation_enabled && pl.spotify_playlist_id && (
+          <button onClick={() => setShowRotSettings(v => !v)}
+            style={{ background: "none", border: "none", cursor: "pointer",
+              fontSize: "11px", color: C.muted, marginLeft: "auto",
+              padding: 0, textDecoration: "underline" }}>
+            {showRotSettings ? "Hide settings" : "⚙ Rotation settings"}
+          </button>
+        )}
       </div>
+
+      {showRotSettings && (
+        <div style={{ marginTop: "14px", padding: "16px", borderRadius: "10px",
+          background: "#0a0a0a", border: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: C.label,
+            textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "14px" }}>
+            Auto-Rotation Settings
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+            gap: "12px", marginBottom: "14px" }}>
+
+            <div>
+              <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>Swap out</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input type="range" min={2} max={15} step={1} value={rotSize}
+                  onChange={e => setRotSize(parseInt(e.target.value))}
+                  style={{ flex: 1, accentColor: C.green }} />
+                <span style={{ fontSize: "14px", fontWeight: 800, color: "#fff", minWidth: "20px" }}>
+                  {rotSize}
+                </span>
+              </div>
+              <div style={{ fontSize: "11px", color: C.label, marginTop: "2px" }}>tracks per rotation</div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>Pull from</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {SOURCE_OPTS.map(o => (
+                  <button key={o.v} onClick={() => setRotSource(o.v)} style={{
+                    background: rotSource === o.v ? C.greenBg : "#151515",
+                    border: `1px solid ${rotSource === o.v ? C.green : C.border}`,
+                    borderRadius: "7px", padding: "5px 8px", cursor: "pointer", textAlign: "left",
+                  }}>
+                    <div style={{ fontSize: "12px", fontWeight: 600,
+                      color: rotSource === o.v ? C.green : "#fff" }}>{o.label}</div>
+                    <div style={{ fontSize: "10px", color: C.muted }}>{o.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>How often</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {INTERVAL_OPTS.map(o => (
+                  <button key={o.value} onClick={() => setRotInterval(o.value)} style={{
+                    background: rotInterval === o.value ? C.greenBg : "#151515",
+                    border: `1px solid ${rotInterval === o.value ? C.green : C.border}`,
+                    borderRadius: "7px", padding: "5px 10px", cursor: "pointer", textAlign: "left",
+                    fontSize: "12px", fontWeight: rotInterval === o.value ? 700 : 400,
+                    color: rotInterval === o.value ? C.green : C.sub,
+                  }}>{o.label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button onClick={() => setShowRotSettings(false)}
+              style={btn("ghost", { fontSize: "12px", padding: "6px 14px" })}>Cancel</button>
+            <button onClick={saveRotationSettings} disabled={savingRot}
+              style={btn("primary", { fontSize: "12px", padding: "6px 14px",
+                opacity: savingRot ? 0.5 : 1 })}>
+              {savingRot ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Rotate modal ─────────────────────────────────────────────────────────────
 function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
-  const [size, setSize] = useState(playlist.rotation_size || 5);
+  const [size,   setSize]   = useState(playlist.rotation_size   || 5);
   const [source, setSource] = useState(playlist.rotation_source || "library");
 
+  const SOURCE_OPTS = [
+    { v: "library",  label: "Library",         desc: "Re-runs your rule, pulls fresh library tracks not yet in the playlist" },
+    { v: "similar",  label: "Similar Artists", desc: "Finds artists similar to what is in the playlist via Last.fm" },
+    { v: "discover", label: "Discover",        desc: "ReccoBeats recommendations seeded from current playlist tracks" },
+  ];
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
       zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ ...card(), width: "420px", maxWidth: "95vw",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+      <div style={{ ...card(), width: "460px", maxWidth: "95vw",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.7)" }}>
 
         <div style={{ display: "flex", justifyContent: "space-between",
-          alignItems: "center", marginBottom: "18px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
-            Rotate "{playlist.name}"
-          </h3>
+          alignItems: "center", marginBottom: "20px" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
+              Rotate "{playlist.name}"
+            </h3>
+            <div style={{ fontSize: "12px", color: C.muted, marginTop: "3px" }}>
+              Swaps lowest-fitting tracks for fresh ones that match the vibe
+            </div>
+          </div>
           <button onClick={onClose}
             style={{ background: "none", border: "none", color: C.muted,
-              cursor: "pointer", fontSize: "20px" }}>×</button>
+              cursor: "pointer", fontSize: "22px", lineHeight: 1 }}>×</button>
         </div>
 
         {result ? (
           <div>
-            <p style={{ color: C.green, fontWeight: 700, marginBottom: "12px" }}>
-              ✓ Rotated {result.rotated} tracks
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              <span style={{ fontSize: "20px" }}>✓</span>
+              <span style={{ color: C.green, fontWeight: 700, fontSize: "15px" }}>
+                Rotated {result.rotated} tracks
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr",
+              gap: "16px", marginBottom: "16px" }}>
               <div>
                 <div style={{ fontSize: "11px", color: C.red, fontWeight: 600,
-                  marginBottom: "6px" }}>REMOVED</div>
+                  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Removed</div>
                 {result.removed.map((n, i) => (
-                  <div key={i} style={{ fontSize: "12px", color: C.muted,
-                    marginBottom: "4px" }}>− {n}</div>
+                  <div key={i} style={{ fontSize: "12px", color: C.muted, marginBottom: "5px" }}>
+                    <span style={{ color: C.red }}>− </span>{n}
+                  </div>
                 ))}
               </div>
               <div>
                 <div style={{ fontSize: "11px", color: C.green, fontWeight: 600,
-                  marginBottom: "6px" }}>ADDED</div>
+                  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Added</div>
                 {result.added.map((n, i) => (
-                  <div key={i} style={{ fontSize: "12px", color: C.sub,
-                    marginBottom: "4px" }}>+ {n}</div>
+                  <div key={i} style={{ fontSize: "12px", color: C.sub, marginBottom: "5px" }}>
+                    <span style={{ color: C.green }}>+ </span>{n}
+                  </div>
                 ))}
               </div>
             </div>
-            <button onClick={onClose} style={{ ...btn("ghost"), marginTop: "16px" }}>
-              Done
-            </button>
+            <button onClick={onClose} style={{ ...btn("ghost"), width: "100%" }}>Done</button>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
             <div>
-              <label style={{ fontSize: "11px", color: C.label,
-                fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-                display: "block", marginBottom: "8px" }}>Swap out</label>
-              <select value={size} onChange={e => setSize(parseInt(e.target.value))}
-                style={{ ...input() }}>
-                {[3,5,8,10,15].map(n => (
-                  <option key={n} value={n}>{n} tracks</option>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                <label style={{ fontSize: "11px", color: C.label, fontWeight: 600,
+                  textTransform: "uppercase", letterSpacing: "0.5px" }}>Swap out</label>
+                <span style={{ fontSize: "14px", fontWeight: 800, color: "#fff" }}>{size} tracks</span>
+              </div>
+              <input type="range" min={2} max={15} step={1} value={size}
+                onChange={e => setSize(parseInt(e.target.value))}
+                style={{ width: "100%", accentColor: C.green }} />
+              <div style={{ display: "flex", justifyContent: "space-between",
+                fontSize: "10px", color: C.label, marginTop: "3px" }}>
+                <span>2</span><span>15</span>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "11px", color: C.label, fontWeight: 600,
+                textTransform: "uppercase", letterSpacing: "0.5px",
+                display: "block", marginBottom: "10px" }}>Pull replacements from</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {SOURCE_OPTS.map(o => (
+                  <button key={o.v} onClick={() => setSource(o.v)} style={{
+                    background: source === o.v ? C.greenBg : "#151515",
+                    border: `1px solid ${source === o.v ? C.green : C.border}`,
+                    borderRadius: "9px", padding: "10px 14px",
+                    cursor: "pointer", textAlign: "left", transition: "all 0.12s",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{
+                        width: "14px", height: "14px", borderRadius: "50%",
+                        border: `2px solid ${source === o.v ? C.green : C.border}`,
+                        background: source === o.v ? C.green : "transparent", flexShrink: 0,
+                      }} />
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: 700,
+                          color: source === o.v ? C.green : "#fff" }}>{o.label}</div>
+                        <div style={{ fontSize: "11px", color: C.muted, marginTop: "1px" }}>{o.desc}</div>
+                      </div>
+                    </div>
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: "11px", color: C.label,
-                fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-                display: "block", marginBottom: "8px" }}>Pull replacements from</label>
-              {[
-                ["library",  "Library",         "Fresh tracks matching your original rule"],
-                ["similar",  "Similar Artists",  "Last.fm similar-artists found in your library"],
-                ["discover", "Discover",         "ReccoBeats picks matching the playlist vibe"],
-              ].map(([v, l, desc]) => (
-                <label key={v} onClick={() => setSource(v)}
-                  style={{ display: "flex", gap: "10px", padding: "10px 12px",
-                    background: source === v ? C.greenBg : C.card2,
-                    border: `1px solid ${source === v ? C.greenBd : C.border}`,
-                    borderRadius: "8px", cursor: "pointer", marginBottom: "6px" }}>
-                  <div style={{ width: "14px", height: "14px", borderRadius: "50%",
-                    border: `2px solid ${source === v ? C.green : C.muted}`,
-                    background: source === v ? C.green : "transparent",
-                    flexShrink: 0, marginTop: "2px" }} />
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{l}</div>
-                    <div style={{ fontSize: "11px", color: C.muted }}>{desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
-              <button onClick={onClose} style={btn("ghost")}>Cancel</button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={onClose} style={btn("ghost", { flex: 1 })}>Cancel</button>
               <button onClick={() => onRotate(size, source)} disabled={rotating}
-                style={btn("primary", { opacity: rotating ? 0.5 : 1 })}>
-                {rotating ? "Rotating..." : `Rotate ${size} tracks`}
+                style={btn("primary", { flex: 2, opacity: rotating ? 0.5 : 1 })}>
+                {rotating ? "Rotating..." : `↻ Rotate ${size} tracks`}
               </button>
             </div>
           </div>
@@ -751,12 +902,15 @@ export default function Playlists() {
     const conds = overrideConds !== undefined ? overrideConds : conditions;
     const excls = overrideExcls !== undefined ? overrideExcls : excludes;
     setLoading(true);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 15000);
     try {
       const r = await fetch(`${API}/playlists/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conditions: conds, excludes: excls,
           sort_by: sortBy, sort_order: sortOrder, limit }),
+        signal: ctrl.signal,
       });
       const d = await r.json();
       if (d.error) { alert(d.error); return; }
@@ -764,7 +918,13 @@ export default function Playlists() {
       setStats(d.stats || null);
     } catch (e) {
       console.error(e);
+      if (e.name === "AbortError") {
+        alert("Preview timed out. Check that the backend is running on " + API);
+      } else {
+        alert("Preview failed: " + e.message + "\nIs the backend running at " + API + "?");
+      }
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   }, [conditions, excludes, sortBy, sortOrder, limit]);
@@ -1232,7 +1392,8 @@ export default function Playlists() {
                 onSync={handleSync}
                 onRotate={(p) => { setRotateTarget(p); setRotateResult(null); }}
                 onDelete={handleDelete}
-                onEdit={handleEdit} />
+                onEdit={handleEdit}
+                onSaved={loadSaved} />
             ))
           )}
         </div>
