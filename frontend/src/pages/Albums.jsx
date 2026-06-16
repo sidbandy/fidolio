@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function ScoreBar({ score, max = 1 }) {
   const pct = Math.round((score / max) * 100);

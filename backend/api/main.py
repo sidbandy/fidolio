@@ -1,12 +1,19 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import stats, library, search, discovery, nowplaying, albums, collab, playlists
 
 app = FastAPI(title="Fidolio API", version="1.0.0")
 
+# Allowed origins come from env (comma-separated) so the deployed frontend
+# can talk to the deployed backend. Defaults cover local dev.
+_default_origins = "http://localhost:5173,http://127.0.0.1:5173"
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", _default_origins).split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Vercel preview + prod deploys
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

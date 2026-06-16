@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const SORT_OPTIONS = [
   { value: "saved_at",  label: "Date Saved" },

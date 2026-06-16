@@ -16,3 +16,9 @@ dist/
 
 # OS
 .DS_Store
+# Python compiled
+__pycache__/
+*.pyc
+
+# Editor backups
+*.bak
