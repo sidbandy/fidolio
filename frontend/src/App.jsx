@@ -11,7 +11,6 @@ import NowPlaying    from "./components/NowPlaying";
 import TimeCapsule from "./pages/TimeCapsule";
 import CollabPage from "./pages/Collab";
 import Playlists from "./pages/Playlists";
-import MonthlyRewind from "./pages/MonthlyRewind";
 
 const NAV_LINKS = [
   { to: "/",            label: "Sonic Identity" },
@@ -23,8 +22,8 @@ const NAV_LINKS = [
   { to: "/albums",      label: "Albums" },
   { to: "/timeline",    label: "Timeline" },
   { to: "/rewind",      label: "Monthly Rewind" },
-  { to: "/capsule",     label: "Time Capsules" },
   { to: "/playlists",   label: "Playlists" },
+  { to: "/collab",      label: "Collab" },
 ];
 
 function Nav() {
@@ -72,8 +71,8 @@ export default function App() {
           <Route path="/discovery" element={<Discovery />} />
           <Route path="/albums"    element={<Albums />} />
           <Route path="/timeline"  element={<Timeline />} />
-          <Route path="/rewind"   element={<MonthlyRewind />} />
-          <Route path="/capsule" element={<TimeCapsule />} />
+          <Route path="/rewind"   element={<TimeCapsule />} />
+          <Route path="/capsule"  element={<TimeCapsule />} />
           <Route path="/collab"         element={<CollabPage />} />
           <Route path="/collab/:roomId" element={<CollabPage />} />
           <Route path="/playlists"      element={<Playlists />} />

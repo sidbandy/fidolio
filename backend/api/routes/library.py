@@ -257,6 +257,117 @@ def create_month_playlist(year: int = Query(...), month: int = Query(...),
         return {"success": False, "message": res.get("error", "Spotify error")}
     return {"success": True, **res}
 
+
+# ─── Multi-month selection (range or arbitrary set of months) ────────────────
+
+def _parse_months(months: str):
+    """'2025-12,2026-01' -> [(2025,12),(2026,1)] sorted chronologically."""
+    out = []
+    for tok in (months or "").split(","):
+        tok = tok.strip()
+        if "-" in tok:
+            try:
+                y, m = tok.split("-")
+                out.append((int(y), int(m)))
+            except Exception:
+                pass
+    return sorted(set(out))
+
+
+def _months_where(months_list):
+    """Build a WHERE fragment + params matching any of the given months."""
+    clauses, params = [], []
+    for (y, m) in months_list:
+        last = calendar.monthrange(y, m)[1]
+        clauses.append("(saved_at >= %s AND saved_at <= %s)")
+        params += [f"{y}-{str(m).zfill(2)}-01 00:00:00",
+                   f"{y}-{str(m).zfill(2)}-{last} 23:59:59"]
+    return "(" + " OR ".join(clauses) + ")", params
+
+
+@router.get("/range-tracks")
+def range_tracks(months: str = Query(..., description="comma list e.g. 2025-12,2026-01"),
+                 user_id: str = Query(DEFAULT_USER)):
+    """All tracks saved across a set of months, deduped, oldest first."""
+    ms = _parse_months(months)
+    if not ms:
+        return {"tracks": [], "months": []}
+    frag, params = _months_where(ms)
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT DISTINCT ON (id) id, name, artist, album, saved_at,
+               tempo, energy, valence, release_year, language
+        FROM tracks
+        WHERE user_id = %s AND {frag}
+        ORDER BY id, saved_at ASC
+    """, [user_id] + params)
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    tracks = [{
+        "id": r[0], "name": r[1], "artist": r[2], "album": r[3],
+        "saved_at": str(r[4])[:10],
+        "tempo":   round(float(r[5]), 1) if r[5] else None,
+        "energy":  round(float(r[6]), 2) if r[6] else None,
+        "valence": round(float(r[7]), 2) if r[7] else None,
+        "release_year": r[8], "language": r[9],
+        "spotify_url": f"https://open.spotify.com/track/{r[0]}",
+    } for r in rows]
+    tracks.sort(key=lambda t: t["saved_at"])
+    return {"tracks": tracks, "months": [f"{y}-{str(m).zfill(2)}" for y, m in ms]}
+
+
+@router.post("/multi-month-playlist")
+def multi_month_playlist(months: str = Query(...), name: str = Query(""),
+                         user_id: str = Query(DEFAULT_USER)):
+    """Create ONE Spotify playlist from all songs saved across the chosen months."""
+    ms = _parse_months(months)
+    if not ms:
+        return {"success": False, "message": "No months selected"}
+
+    # Single month → reuse the tracked per-month engine (so 'in Spotify' shows up)
+    if len(ms) == 1:
+        sp  = get_spotify()
+        res = create_or_sync_month(sp, user_id, ms[0][0], ms[0][1], force=True)
+        if res["status"] == "skipped_empty":
+            return {"success": False, "message": "No songs saved that month"}
+        if res["status"] == "error":
+            return {"success": False, "message": res.get("error", "Spotify error")}
+        return {"success": True, "track_count": res["track_count"],
+                "playlist_url": res["playlist_url"]}
+
+    # Multiple months → ad-hoc combined playlist
+    frag, params = _months_where(ms)
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT DISTINCT ON (id) id, saved_at FROM tracks
+        WHERE user_id = %s AND {frag} ORDER BY id, saved_at ASC
+    """, [user_id] + params)
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    track_ids = [r[0] for r in sorted(rows, key=lambda r: r[1])]
+    if not track_ids:
+        return {"success": False, "message": "No songs saved in those months"}
+
+    if not name:
+        first = f"{calendar.month_abbr[ms[0][1]]} {ms[0][0]}"
+        last  = f"{calendar.month_abbr[ms[-1][1]]} {ms[-1][0]}"
+        name  = f"Fidolio: {first}–{last}"
+
+    try:
+        sp = get_spotify()
+        me = sp.current_user()
+        pl = sp.user_playlist_create(me["id"], name, public=False,
+            description=f"Saved across {len(ms)} months — built by Fidolio")
+        for i in range(0, len(track_ids), 100):
+            sp.playlist_add_items(pl["id"], [f"spotify:track:{t}" for t in track_ids[i:i+100]])
+        return {"success": True, "track_count": len(track_ids),
+                "playlist_url": pl["external_urls"]["spotify"]}
+    except Exception as e:
+        msg = str(e)
+        if "403" in msg or "Forbidden" in msg:
+            msg = "Spotify 403 — re-auth needed (or app write access not yet active)."
+        return {"success": False, "message": msg}
+
 @router.get("/duplicates")
 def find_duplicates(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
     conn = get_conn()
