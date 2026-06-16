@@ -2,14 +2,169 @@ from fastapi import APIRouter, Query
 import psycopg2
 import os
 import calendar
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 router = APIRouter()
 DB_URL = os.getenv("DATABASE_URL")
 
+DEFAULT_USER = "0tz6fep2m5bx1vq85g48518u9"
+
+SCOPE = " ".join([
+    "user-library-read", "user-read-recently-played", "user-top-read",
+    "playlist-read-private", "playlist-modify-public", "playlist-modify-private",
+    "user-read-currently-playing", "user-read-playback-state",
+])
+
 def get_conn():
     return psycopg2.connect(DB_URL)
+
+
+def get_spotify():
+    import spotipy
+    from spotipy.oauth2 import SpotifyOAuth
+    cache = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', '..', '..', '.cache')
+    )
+    return spotipy.Spotify(auth_manager=SpotifyOAuth(
+        client_id=os.getenv("SPOTIFY_CLIENT_ID"),
+        client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
+        redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI"),
+        scope=SCOPE, open_browser=False, cache_path=cache,
+    ))
+
+
+# ─── Monthly auto-playlists ───────────────────────────────────────────────────
+# Idempotent: each (user, year, month) maps to one Spotify playlist tracked here.
+
+def ensure_monthly_table():
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS monthly_playlists (
+            id            SERIAL PRIMARY KEY,
+            user_id       TEXT,
+            year          INTEGER,
+            month         INTEGER,
+            playlist_id   TEXT,
+            playlist_url  TEXT,
+            track_count   INTEGER,
+            last_synced_at TIMESTAMP,
+            created_at    TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, year, month)
+        )
+    """)
+    conn.commit(); cur.close(); conn.close()
+
+
+def month_track_ids(cur, user_id, year, month):
+    last_day  = calendar.monthrange(year, month)[1]
+    month_str = f"{year}-{str(month).zfill(2)}"
+    cur.execute("""
+        SELECT id FROM tracks
+        WHERE user_id = %s AND saved_at >= %s AND saved_at <= %s
+        ORDER BY saved_at ASC
+    """, (user_id, f"{month_str}-01 00:00:00", f"{month_str}-{last_day} 23:59:59"))
+    return [r[0] for r in cur.fetchall()]
+
+
+def create_or_sync_month(sp, user_id, year, month, force=False):
+    """
+    Create (or re-sync) the Spotify playlist for one month of saves.
+    Returns a dict describing what happened. Idempotent via monthly_playlists.
+    """
+    ensure_monthly_table()
+    conn = get_conn(); cur = conn.cursor()
+    track_ids = month_track_ids(cur, user_id, year, month)
+
+    if not track_ids:
+        cur.close(); conn.close()
+        return {"year": year, "month": month, "status": "skipped_empty", "track_count": 0}
+
+    cur.execute("""
+        SELECT playlist_id, playlist_url, track_count FROM monthly_playlists
+        WHERE user_id = %s AND year = %s AND month = %s
+    """, (user_id, year, month))
+    existing = cur.fetchone()
+
+    # Already exists and unchanged and not forced → nothing to do
+    if existing and not force and existing[2] == len(track_ids):
+        cur.close(); conn.close()
+        return {"year": year, "month": month, "status": "unchanged",
+                "track_count": len(track_ids), "playlist_url": existing[1]}
+
+    month_name = calendar.month_name[month]
+    pl_name    = f"Fidolio: {month_name} {year}"
+
+    try:
+        if existing and existing[0]:
+            playlist_id  = existing[0]
+            playlist_url = existing[1]
+            # Replace contents to reflect current saves
+            sp.playlist_replace_items(playlist_id, [])
+            for i in range(0, len(track_ids), 100):
+                sp.playlist_add_items(playlist_id,
+                    [f"spotify:track:{t}" for t in track_ids[i:i+100]])
+            status = "synced"
+        else:
+            me = sp.current_user()
+            pl = sp.user_playlist_create(
+                me["id"], pl_name, public=False,
+                description=f"Everything you saved in {month_name} {year} — auto-built by Fidolio",
+            )
+            playlist_id  = pl["id"]
+            playlist_url = pl["external_urls"]["spotify"]
+            for i in range(0, len(track_ids), 100):
+                sp.playlist_add_items(playlist_id,
+                    [f"spotify:track:{t}" for t in track_ids[i:i+100]])
+            status = "created"
+    except Exception as e:
+        cur.close(); conn.close()
+        msg = str(e)
+        if "403" in msg or "Forbidden" in msg:
+            msg = "Spotify 403 — run python scripts/reauth_server.py to refresh the token."
+        return {"year": year, "month": month, "status": "error", "error": msg}
+
+    cur.execute("""
+        INSERT INTO monthly_playlists
+            (user_id, year, month, playlist_id, playlist_url, track_count, last_synced_at, created_at)
+        VALUES (%s,%s,%s,%s,%s,%s,NOW(),NOW())
+        ON CONFLICT (user_id, year, month) DO UPDATE
+            SET playlist_id=EXCLUDED.playlist_id, playlist_url=EXCLUDED.playlist_url,
+                track_count=EXCLUDED.track_count, last_synced_at=NOW()
+    """, (user_id, year, month, playlist_id, playlist_url, len(track_ids)))
+    conn.commit(); cur.close(); conn.close()
+
+    return {"year": year, "month": month, "status": status,
+            "track_count": len(track_ids), "playlist_url": playlist_url, "name": pl_name}
+
+
+@router.get("/monthly-playlists")
+def list_monthly_playlists(user_id: str = Query(DEFAULT_USER)):
+    ensure_monthly_table()
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""
+        SELECT year, month, playlist_url, track_count, last_synced_at
+        FROM monthly_playlists WHERE user_id = %s
+        ORDER BY year DESC, month DESC
+    """, (user_id,))
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    return {"playlists": [{
+        "year": r[0], "month": r[1],
+        "month_name": calendar.month_name[r[1]],
+        "playlist_url": r[2], "track_count": r[3],
+        "last_synced_at": str(r[4])[:16] if r[4] else None,
+    } for r in rows]}
+
+
+@router.post("/monthly-playlists/sync-current")
+def sync_current_month(user_id: str = Query(DEFAULT_USER)):
+    """Create or refresh the playlist for the current calendar month."""
+    now = datetime.now()
+    sp  = get_spotify()
+    result = create_or_sync_month(sp, user_id, now.year, now.month, force=True)
+    return result
 
 @router.get("/duplicates")
 def find_duplicates(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
@@ -180,65 +335,20 @@ def liked_songs(
 def create_time_capsule(
     year:    int = Query(...),
     month:   int = Query(...),
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")
+    user_id: str = Query(DEFAULT_USER)
 ):
-    import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-    import spotipy
-    from spotipy.oauth2 import SpotifyOAuth
+    # Unified with the monthly-playlist engine — idempotent, won't duplicate.
+    sp = get_spotify()
+    result = create_or_sync_month(sp, user_id, year, month, force=True)
 
-    SCOPE = " ".join([
-        "user-library-read", "user-read-recently-played", "user-top-read",
-        "playlist-read-private", "playlist-modify-public", "playlist-modify-private",
-        "user-read-currently-playing", "user-read-playback-state",
-    ])
-    cache_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), '..', '..', '..', '.cache')
-    )
-    auth = SpotifyOAuth(
-        client_id=os.getenv("SPOTIFY_CLIENT_ID"),
-        client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
-        redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI"),
-        scope=SCOPE, open_browser=False, cache_path=cache_path
-    )
-    sp = spotipy.Spotify(auth_manager=auth)
+    if result["status"] == "skipped_empty":
+        return {"success": False, "message": f"No songs saved in {year}-{str(month).zfill(2)}"}
+    if result["status"] == "error":
+        return {"success": False, "message": result.get("error", "Spotify error")}
 
-    conn = get_conn()
-    cur  = conn.cursor()
-    last_day  = calendar.monthrange(year, month)[1]
-    month_str = f"{year}-{str(month).zfill(2)}"
-
-    cur.execute("""
-        SELECT id FROM tracks
-        WHERE user_id = %s
-          AND saved_at >= %s AND saved_at <= %s
-        ORDER BY saved_at ASC
-    """, (user_id, f"{month_str}-01", f"{month_str}-{last_day}"))
-    track_ids = [r[0] for r in cur.fetchall()]
-    cur.close()
-    conn.close()
-
-    if not track_ids:
-        return {"success": False, "message": f"No songs saved in {month_str}"}
-
-    month_name    = calendar.month_name[month]
-    playlist_name = f"Fidolio: {month_name} {year}"
-
-    try:
-        sp_user  = sp.current_user()
-        playlist = sp.user_playlist_create(
-            sp_user["id"], playlist_name, public=False,
-            description=f"Songs saved in {month_name} {year} — created by Fidolio"
-        )
-        for i in range(0, len(track_ids), 100):
-            batch = [f"spotify:track:{tid}" for tid in track_ids[i:i+100]]
-            sp.playlist_add_items(playlist["id"], batch)
-
-        return {
-            "success":      True,
-            "playlist_name": playlist_name,
-            "track_count":  len(track_ids),
-            "playlist_url": playlist["external_urls"]["spotify"]
-        }
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    return {
+        "success":       True,
+        "playlist_name": result.get("name", f"Fidolio: {calendar.month_name[month]} {year}"),
+        "track_count":   result["track_count"],
+        "playlist_url":  result["playlist_url"],
+    }

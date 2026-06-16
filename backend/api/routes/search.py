@@ -120,6 +120,33 @@ def parse_nlp(query: str, db_artists: list = None) -> dict:
         filters["max_speechiness"] = 0.05
         explanations.append("instrumental")
 
+    # ── Language ──
+    # Maps natural phrasing → the language tag stored on tracks.language
+    LANG_KEYWORDS = {
+        "bengali":   ["bengali", "bangla"],
+        "hindi":     ["hindi", "bollywood", "desi"],
+        "punjabi":   ["punjabi", "bhangra"],
+        "arabic":    ["arabic", "arab"],
+        "spanish":   ["spanish", "español", "espanol", "latino", "latin"],
+        "french":    ["french", "français", "francais"],
+        "portuguese":["portuguese", "português", "brazilian", "bossa"],
+        "japanese":  ["japanese", "jpop", "j-pop", "city pop"],
+        "chinese":   ["chinese", "mandarin", "cantonese", "cpop", "c-pop"],
+        "korean":    ["korean", "kpop", "k-pop"],
+        "tamil":     ["tamil"],
+        "telugu":    ["telugu"],
+        "urdu":      ["urdu", "ghazal", "qawwali"],
+    }
+    for lang, kws in LANG_KEYWORDS.items():
+        if any(re.search(rf"\b{re.escape(kw)}\b", q) for kw in kws):
+            filters["language"] = lang
+            explanations.append(f"{lang} language")
+            # strip matched keyword(s) so they don't pollute text/artist matching
+            for kw in kws:
+                q = re.sub(rf"\b{re.escape(kw)}\b", "", q)
+            q = q.strip()
+            break
+
     # ── Decade detection ──
     decade_map = {
         "2020s":(2020,2029),"20s":(2020,2029),
@@ -189,6 +216,10 @@ def run_search(user_id, filters, artist, text, limit, decade_fallback=True):
         clauses.append("(LOWER(name) LIKE %s OR LOWER(album) LIKE %s)")
         params.extend([f"%{text.lower()}%"] * 2)
 
+    if filters.get("language"):
+        clauses.append("language = %s")
+        params.append(filters["language"])
+
     feature_map = [
         ("min_valence",      "valence >= %s"),
         ("max_valence",      "valence <= %s"),
@@ -225,7 +256,7 @@ def run_search(user_id, filters, artist, text, limit, decade_fallback=True):
 
     cur.execute(f"""
         SELECT id, name, artist, album, saved_at, release_year,
-               tempo, energy, valence, danceability, acousticness
+               tempo, energy, valence, danceability, acousticness, language
         FROM tracks {where}
         ORDER BY {order}
         LIMIT %s
@@ -247,6 +278,7 @@ def fmt(rows):
         "valence":      round(float(r[8]),  2) if r[8]  else None,
         "danceability": round(float(r[9]),  2) if r[9]  else None,
         "acousticness": round(float(r[10]), 2) if r[10] else None,
+        "language":     r[11] if len(r) > 11 else None,
         "spotify_url":  f"https://open.spotify.com/track/{r[0]}"
     } for r in rows]
 
@@ -314,6 +346,7 @@ def search_library(
     min_year:         Optional[int]   = Query(None),
     max_year:         Optional[int]   = Query(None),
     artist:           Optional[str]   = Query(None),
+    language:         Optional[str]   = Query(None),
     limit:            int             = Query(20, le=100),
     offset:           int             = Query(0),
     user_id:          str             = Query("0tz6fep2m5bx1vq85g48518u9"),
@@ -329,6 +362,9 @@ def search_library(
     if artist:
         clauses.append("LOWER(artist) LIKE %s")
         params.append(f"%{artist.lower()}%")
+    if language:
+        clauses.append("language = %s")
+        params.append(language.lower())
     if min_tempo        is not None: clauses.append("tempo >= %s");        params.append(min_tempo)
     if max_tempo        is not None: clauses.append("tempo <= %s");        params.append(max_tempo)
     if min_energy       is not None: clauses.append("energy >= %s");       params.append(min_energy)
@@ -347,7 +383,7 @@ def search_library(
     params.extend([limit, offset])
     cur.execute(f"""
         SELECT id, name, artist, album, saved_at, release_year,
-               tempo, energy, valence, danceability, acousticness, preview_url
+               tempo, energy, valence, danceability, acousticness, preview_url, language
         FROM tracks {where}
         ORDER BY saved_at DESC
         LIMIT %s OFFSET %s
@@ -367,6 +403,7 @@ def search_library(
             "danceability": round(float(r[9]),  2) if r[9]  else None,
             "acousticness": round(float(r[10]), 2) if r[10] else None,
             "preview_url":  r[11],
+            "language":     r[12],
             "spotify_url":  f"https://open.spotify.com/track/{r[0]}"
         } for r in rows]
     }

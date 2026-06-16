@@ -347,6 +347,39 @@ class RotateBody(BaseModel):
     rotation_source: Optional[str] = None    # override saved default
 
 
+class FromTracksBody(BaseModel):
+    name:      str
+    track_ids: list
+    public:    bool = False
+    user_id:   str  = "0tz6fep2m5bx1vq85g48518u9"
+
+
+@router.post("/from-tracks")
+def create_from_tracks(body: FromTracksBody):
+    """Create a one-off Spotify playlist from an explicit list of track IDs.
+    Used by Search → 'Save as Playlist'. Not rule-managed (no rotation/sync)."""
+    ids = [t for t in body.track_ids if t]
+    if not ids:
+        return {"error": "No tracks to add."}
+    try:
+        sp = get_spotify()
+        me = sp.current_user()
+        pl = sp.user_playlist_create(
+            me["id"], body.name, public=body.public,
+            description="Created from a Fidolio search",
+        )
+        for i in range(0, len(ids), 100):
+            sp.playlist_add_items(pl["id"], [f"spotify:track:{t}" for t in ids[i:i+100]])
+        return {
+            "success":      True,
+            "track_count":  len(ids),
+            "playlist_url": pl["external_urls"]["spotify"],
+            "playlist_id":  pl["id"],
+        }
+    except Exception as e:
+        return {"success": False, "error": spotify_error(e)}
+
+
 # ─── Setup / language detection ──────────────────────────────────────────────
 
 SCRIPT_RANGES = [

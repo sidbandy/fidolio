@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import usePreview from "../hooks/usePreview";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const LIMIT = 50;
 
 const QUICK_VIBES = [
   { label: "🌙 Late Night",   params: { max_valence: 0.4, max_energy: 0.55 } },
@@ -14,6 +15,12 @@ const QUICK_VIBES = [
   { label: "💿 90s",          params: { min_year: 1990, max_year: 1999 } },
   { label: "💿 2000s",        params: { min_year: 2000, max_year: 2009 } },
   { label: "💿 2010s",        params: { min_year: 2010, max_year: 2019 } },
+];
+
+// Languages present in the library (tracks.language)
+const LANGUAGES = [
+  "", "english", "hindi", "bengali", "arabic", "spanish", "french",
+  "portuguese", "japanese", "chinese", "punjabi", "tamil", "urdu",
 ];
 
 const moodColor = (v) => {
@@ -78,6 +85,12 @@ function TrackRow({ track, playing, onPlay }) {
             {track.valence < 0.3 ? "dark" : track.valence < 0.6 ? "neutral" : "happy"}
           </span>
         )}
+        {track.language && track.language !== "english" && (
+          <span style={{ color: "#f59e0b", background: "#1a1200",
+            padding: "2px 7px", borderRadius: "4px", fontWeight: 600 }}>
+            {track.language}
+          </span>
+        )}
         <a href={track.spotify_url} target="_blank" rel="noreferrer"
           style={{ color: "#2a2a2a", textDecoration: "none", padding: "2px 6px" }}>
           ↗
@@ -109,6 +122,14 @@ export default function Search() {
   const [maxYear,      setMaxYear]      = useState("");
   const [artistFilter, setArtistFilter] = useState("");
   const [minAcoustic,  setMinAcoustic]  = useState("");
+  const [language,     setLanguage]     = useState("");
+  const [activeVibe,   setActiveVibe]   = useState(null);
+
+  // Save-as-playlist state
+  const [saving,    setSaving]    = useState(false);
+  const [saveName,  setSaveName]  = useState("");
+  const [showSave,  setShowSave]  = useState(false);
+  const [saveResult, setSaveResult] = useState(null);
 
   const { playing, play } = usePreview();
 
@@ -116,7 +137,8 @@ export default function Search() {
     if (!nlpQuery.trim()) return;
     setLoading(true);
     setInterpreted(null);
-    const res  = await fetch(`${API}/search/nlp?q=${encodeURIComponent(nlpQuery)}&limit=25`);
+    setSaveResult(null);
+    const res  = await fetch(`${API}/search/nlp?q=${encodeURIComponent(nlpQuery)}&limit=${LIMIT}`);
     const data = await res.json();
     setResults(data.results || []);
     setTotal(data.total || 0);
@@ -127,6 +149,7 @@ export default function Search() {
   const filterSearch = async (extraParams = {}) => {
     setLoading(true);
     setInterpreted(null);
+    setSaveResult(null);
     const p = new URLSearchParams();
     if (textQ)        p.set("q",                textQ);
     if (minTempo)     p.set("min_tempo",         minTempo);
@@ -139,13 +162,30 @@ export default function Search() {
     if (maxYear)      p.set("max_year",          maxYear);
     if (artistFilter) p.set("artist",            artistFilter);
     if (minAcoustic)  p.set("min_acousticness",  minAcoustic);
+    if (language)     p.set("language",          language);
     Object.entries(extraParams).forEach(([k,v]) => p.set(k, v));
-    p.set("limit", "25");
+    p.set("limit", String(LIMIT));
     const res  = await fetch(`${API}/search/?${p}`);
     const data = await res.json();
     setResults(data.results || []);
     setTotal(data.total || 0);
     setLoading(false);
+  };
+
+  // Save current results as a Spotify playlist
+  const saveAsPlaylist = async () => {
+    if (!results?.length || !saveName.trim()) return;
+    setSaving(true);
+    setSaveResult(null);
+    const res = await fetch(`${API}/playlists/from-tracks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: saveName.trim(), track_ids: results.map(t => t.id) }),
+    });
+    const data = await res.json();
+    setSaveResult(data);
+    setSaving(false);
+    if (data.success) setShowSave(false);
   };
 
   const weatherSearch = async () => {
@@ -172,8 +212,9 @@ export default function Search() {
     setTextQ(""); setMinTempo(""); setMaxTempo("");
     setMinEnergy(""); setMaxEnergy(""); setMinValence("");
     setMaxValence(""); setMinYear(""); setMaxYear("");
-    setArtistFilter(""); setMinAcoustic("");
+    setArtistFilter(""); setMinAcoustic(""); setLanguage("");
     setResults(null); setInterpreted(null); setWeatherData(null);
+    setActiveVibe(null); setSaveResult(null);
   };
 
   return (
@@ -253,11 +294,11 @@ export default function Search() {
               "chill late night vibes",
               "sad slow songs",
               "hype workout bangers",
-              "acoustic folk 70s",
+              "chill bengali songs",
+              "upbeat hindi music",
               "dark electronic",
               "happy upbeat summer",
               "focus study no lyrics",
-              "nostalgic 2000s rap",
             ].map(s => (
               <button key={s} onClick={() => { setNlpQuery(s); }} style={{
                 padding: "5px 12px", borderRadius: "14px", border: "1px solid #1a1a1a",
@@ -274,13 +315,25 @@ export default function Search() {
         <div style={{ marginBottom: "24px" }}>
           {/* Quick vibes */}
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
-            {QUICK_VIBES.map(v => (
-              <button key={v.label} onClick={() => { resetFilters(); filterSearch(v.params); }} style={{
-                padding: "6px 14px", borderRadius: "16px", border: "none",
-                background: "#151515", color: "#666",
-                fontSize: "12px", fontWeight: 600, cursor: "pointer"
-              }}>{v.label}</button>
-            ))}
+            {QUICK_VIBES.map(v => {
+              const active = activeVibe === v.label;
+              return (
+                <button key={v.label}
+                  onClick={() => {
+                    resetFilters();
+                    setActiveVibe(v.label);
+                    filterSearch(v.params);
+                  }}
+                  style={{
+                    padding: "6px 14px", borderRadius: "16px",
+                    border: `1px solid ${active ? "#1db954" : "#1a1a1a"}`,
+                    background: active ? "#1db954" : "#151515",
+                    color: active ? "#000" : "#666",
+                    fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    transition: "all 0.15s"
+                  }}>{v.label}</button>
+              );
+            })}
           </div>
 
           {/* Filter grid */}
@@ -368,6 +421,21 @@ export default function Search() {
                     color: "#fff", fontSize: "13px", outline: "none" }} />
               </div>
             </div>
+
+            <div>
+              <div className="label" style={{ marginBottom: "6px" }}>Language</div>
+              <select value={language} onChange={e => setLanguage(e.target.value)}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px",
+                  background: "#111", border: "1px solid #1a1a1a",
+                  color: language ? "#fff" : "#666", fontSize: "13px", outline: "none",
+                  boxSizing: "border-box", cursor: "pointer" }}>
+                {LANGUAGES.map(l => (
+                  <option key={l} value={l}>
+                    {l === "" ? "Any language" : l.charAt(0).toUpperCase() + l.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: "8px" }}>
@@ -406,9 +474,30 @@ export default function Search() {
       {/* Results */}
       {results && !loading && (
         <>
-          <div style={{ fontSize: "13px", color: "#444", marginBottom: "14px" }}>
-            {results.length} songs
-            {total > results.length ? ` of ${total.toLocaleString()} matches` : ""}
+          <div style={{ display: "flex", justifyContent: "space-between",
+            alignItems: "center", marginBottom: "14px", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "13px", color: "#444" }}>
+              {results.length} songs
+              {total > results.length ? ` of ${total.toLocaleString()} matches` : ""}
+            </div>
+            {results.length > 0 && (
+              saveResult?.success ? (
+                <a href={saveResult.playlist_url} target="_blank" rel="noreferrer"
+                  style={{ padding: "8px 18px", borderRadius: "10px", background: "#1db954",
+                    color: "#000", fontWeight: 700, fontSize: "13px", textDecoration: "none",
+                    whiteSpace: "nowrap" }}>
+                  ✓ Open in Spotify ↗
+                </a>
+              ) : (
+                <button onClick={() => { setShowSave(true); setSaveResult(null);
+                    setSaveName(interpreted ? `Fidolio: ${interpreted}` : "Fidolio Search"); }}
+                  style={{ padding: "8px 18px", borderRadius: "10px", border: "1px solid #1a4a2a",
+                    background: "#0d2b18", color: "#1db954", fontWeight: 700, fontSize: "13px",
+                    cursor: "pointer", whiteSpace: "nowrap" }}>
+                  + Save as Playlist
+                </button>
+              )
+            )}
           </div>
 
           {results.length === 0 ? (
@@ -435,6 +524,54 @@ export default function Search() {
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔍</div>
           <div style={{ fontSize: "16px", color: "#333" }}>
             Describe what you want to hear right now.
+          </div>
+        </div>
+      )}
+
+      {/* Save-as-playlist modal */}
+      {showSave && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+          zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowSave(false)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#0e0e0e", border: "1px solid #1a1a1a",
+              borderRadius: "14px", padding: "22px", width: "380px", maxWidth: "92vw",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div style={{ fontSize: "16px", fontWeight: 800, marginBottom: "4px" }}>
+              Save as Spotify Playlist
+            </div>
+            <div style={{ fontSize: "12px", color: "#555", marginBottom: "16px" }}>
+              Creates a playlist with these {results?.length || 0} songs in your Spotify.
+            </div>
+            <input value={saveName} onChange={e => setSaveName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && saveAsPlaylist()}
+              placeholder="Playlist name"
+              autoFocus
+              style={{ width: "100%", padding: "11px 14px", borderRadius: "10px",
+                background: "#111", border: "1px solid #1a1a1a", color: "#fff",
+                fontSize: "14px", outline: "none", boxSizing: "border-box",
+                marginBottom: "16px" }} />
+            {saveResult && !saveResult.success && (
+              <div style={{ fontSize: "12px", color: "#ef4444", marginBottom: "12px" }}>
+                {saveResult.error || "Could not create playlist."}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowSave(false)}
+                style={{ padding: "9px 16px", borderRadius: "10px",
+                  background: "#151515", color: "#888", border: "1px solid #1a1a1a",
+                  fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={saveAsPlaylist} disabled={saving || !saveName.trim()}
+                style={{ padding: "9px 18px", borderRadius: "10px", border: "none",
+                  background: saveName.trim() ? "#1db954" : "#1a1a1a",
+                  color: saveName.trim() ? "#000" : "#555",
+                  fontSize: "13px", fontWeight: 700,
+                  cursor: saveName.trim() ? "pointer" : "default" }}>
+                {saving ? "Creating..." : "Create Playlist"}
+              </button>
+            </div>
           </div>
         </div>
       )}
