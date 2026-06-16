@@ -98,19 +98,47 @@ def get_current_track():
         return {"playing": False, "error": str(e)}
 
 
+import re, difflib
+
+def _norm(s: str) -> str:
+    """Normalize a title/artist for comparison: strip parentheticals, features, punctuation."""
+    s = (s or "").lower()
+    s = re.sub(r"\(.*?\)", " ", s)          # (From "2 States"), (feat. ...)
+    s = re.sub(r"\[.*?\]", " ", s)
+    s = re.sub(r"\s*-\s*from\b.*$", " ", s)  # - From "Movie"
+    s = re.sub(r"\b(feat|ft|with)\.?\b.*$", " ", s)
+    s = re.sub(r"[^\w\s]", " ", s)           # drop punctuation
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _sim(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+def _artist_matches(query_artist: str, hit_artist: str) -> bool:
+    qa, ha = _norm(query_artist), _norm(hit_artist)
+    if not qa or not ha:
+        return False
+    if qa in ha or ha in qa:
+        return True
+    qt = {w for w in qa.split() if len(w) > 2}
+    ht = {w for w in ha.split() if len(w) > 2}
+    return len(qt & ht) >= 1
+
+
 @router.get("/lyrics-meaning")
 def get_lyrics_meaning(track_name: str, artist: str):
-    """Get song meaning and annotations from Genius."""
+    """Get song meaning and annotations from Genius — with strict match verification."""
     if not GENIUS_TOKEN:
         return {"error": "No Genius token configured"}
 
     headers = {"Authorization": f"Bearer {GENIUS_TOKEN}"}
+    clean_title = _norm(track_name)
 
     try:
-        # Search for the song
+        # Search with the cleaned title + artist (parentheticals removed)
         search_resp = requests.get(
             "https://api.genius.com/search",
-            params={"q": f"{track_name} {artist}"},
+            params={"q": f"{clean_title} {artist}".strip()},
             headers=headers,
             timeout=8
         )
@@ -118,17 +146,25 @@ def get_lyrics_meaning(track_name: str, artist: str):
         if not hits:
             return {"found": False, "message": "Song not found on Genius"}
 
-        # Find best match by artist name
-        song = None
+        # Score every hit by title similarity + artist match; keep the best.
+        best, best_score = None, 0.0
         for hit in hits:
-            result = hit.get("result", {})
-            primary_artist = result.get("primary_artist", {}).get("name", "").lower()
-            if artist.lower() in primary_artist or primary_artist in artist.lower():
-                song = result
-                break
-        if not song:
-            song = hits[0]["result"]
+            result      = hit.get("result", {})
+            hit_title   = _norm(result.get("title") or result.get("full_title") or "")
+            hit_artist  = result.get("primary_artist", {}).get("name", "")
+            title_sim   = _sim(clean_title, hit_title)
+            amatch      = _artist_matches(artist, hit_artist)
+            # title carries most of the weight; a matching artist is a strong boost
+            score = title_sim + (0.45 if amatch else 0.0)
+            if score > best_score:
+                best_score, best = score, result
 
+        # Refuse to show a wrong song. Require either a solid title match,
+        # or a decent title match backed by the right artist.
+        if not best or best_score < 0.65:
+            return {"found": False, "message": "No confident match on Genius for this track"}
+
+        song = best
         song_id = song["id"]
         song_url = song.get("url")
         annotation_count = song.get("annotation_count", 0)
