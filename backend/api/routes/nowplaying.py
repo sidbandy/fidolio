@@ -23,7 +23,7 @@ SCOPE = " ".join([
 ])
 
 def get_spotify():
-    cache_path = os.path.join(
+    cache_path = os.getenv("SPOTIFY_CACHE_PATH") or os.path.join(
         os.path.dirname(__file__), '..', '..', '..', '.cache'
     )
     auth = SpotifyOAuth(

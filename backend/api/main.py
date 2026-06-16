@@ -3,6 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import stats, library, search, discovery, nowplaying, albums, collab, playlists
 
+# In the cloud, write the Spotify token from SPOTIFY_TOKEN_CACHE env to disk once.
+try:
+    from core.spotify_client import bootstrap_cache
+    bootstrap_cache()
+except Exception as _e:
+    print(f"[startup] token bootstrap skipped: {_e}")
+
 app = FastAPI(title="Fidolio API", version="1.0.0")
 
 # Allowed origins come from env (comma-separated) so the deployed frontend

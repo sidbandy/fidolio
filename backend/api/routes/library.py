@@ -24,9 +24,8 @@ def get_conn():
 def get_spotify():
     import spotipy
     from spotipy.oauth2 import SpotifyOAuth
-    cache = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), '..', '..', '..', '.cache')
-    )
+    cache = os.path.abspath(os.getenv("SPOTIFY_CACHE_PATH") or
+        os.path.join(os.path.dirname(__file__), '..', '..', '..', '.cache'))
     return spotipy.Spotify(auth_manager=SpotifyOAuth(
         client_id=os.getenv("SPOTIFY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),

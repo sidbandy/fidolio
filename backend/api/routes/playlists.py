@@ -30,9 +30,8 @@ router  = APIRouter()
 DB_URL  = os.getenv("DATABASE_URL")
 LASTFM  = os.getenv("LASTFM_API_KEY")
 RB_BASE = "https://api.reccobeats.com/v1"
-CACHE   = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', '..', '..', '.cache')
-)
+CACHE   = os.getenv("SPOTIFY_CACHE_PATH") and os.path.abspath(os.getenv("SPOTIFY_CACHE_PATH")) \
+    or os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.cache'))
 SCOPE = " ".join([
     "user-library-read", "user-read-recently-played", "user-top-read",
     "playlist-read-private", "playlist-modify-public", "playlist-modify-private",
