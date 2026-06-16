@@ -1,15 +1,9 @@
+# Runtime deps for the Fidolio API (exactly what backend/api imports).
+# Kept slim so cloud builds are fast and reliable. The heavy ML/data libs
+# (used only by one-off local enrichment scripts) live in requirements-dev.txt.
 fastapi==0.111.0
 uvicorn==0.30.1
 spotipy==2.23.0
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.31
-alembic==1.13.2
-pandas==2.2.2
-scikit-learn==1.5.1
-numpy==1.26.4
+psycopg2-binary==2.9.10
 python-dotenv==1.0.1
-httpx==0.27.0
-pgvector==0.3.1
-apscheduler==3.10.4
-sentence-transformers==3.0.1
-python-jose==3.3.0
+requests==2.32.3
