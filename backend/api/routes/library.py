@@ -166,6 +166,97 @@ def sync_current_month(user_id: str = Query(DEFAULT_USER)):
     result = create_or_sync_month(sp, user_id, now.year, now.month, force=True)
     return result
 
+
+@router.get("/monthly-rewind")
+def monthly_rewind(user_id: str = Query(DEFAULT_USER)):
+    """
+    Browse every month you've saved music — computed from the local DB,
+    NO Spotify writes. Shows which months you've already pushed to Spotify.
+    """
+    ensure_monthly_table()
+    conn = get_conn(); cur = conn.cursor()
+
+    # All months with saves + aggregate vibe
+    cur.execute("""
+        SELECT EXTRACT(YEAR FROM saved_at)::int  AS y,
+               EXTRACT(MONTH FROM saved_at)::int AS m,
+               COUNT(*),
+               ROUND(AVG(energy)::numeric, 2),
+               ROUND(AVG(valence)::numeric, 2),
+               ROUND(AVG(tempo)::numeric, 0),
+               COUNT(DISTINCT artist)
+        FROM tracks
+        WHERE user_id = %s AND saved_at IS NOT NULL
+        GROUP BY y, m
+        ORDER BY y DESC, m DESC
+    """, (user_id,))
+    months = cur.fetchall()
+
+    # Which months are already in Spotify
+    cur.execute("""
+        SELECT year, month, playlist_url, track_count
+        FROM monthly_playlists WHERE user_id = %s
+    """, (user_id,))
+    in_spotify = {(r[0], r[1]): {"url": r[2], "count": r[3]} for r in cur.fetchall()}
+
+    cur.close(); conn.close()
+
+    out = []
+    for r in months:
+        y, m, count, avg_e, avg_v, avg_t, artists = r
+        sp_rec = in_spotify.get((y, m))
+        out.append({
+            "year": y, "month": m, "month_name": calendar.month_name[m],
+            "track_count": count,
+            "avg_energy":  float(avg_e) if avg_e is not None else None,
+            "avg_valence": float(avg_v) if avg_v is not None else None,
+            "avg_tempo":   int(avg_t)   if avg_t is not None else None,
+            "unique_artists": artists,
+            "in_spotify":   bool(sp_rec),
+            "playlist_url": sp_rec["url"] if sp_rec else None,
+        })
+    return {"months": out, "total_months": len(out)}
+
+
+@router.get("/month-tracks")
+def month_tracks(year: int = Query(...), month: int = Query(...),
+                 user_id: str = Query(DEFAULT_USER)):
+    """Full track list for one month (for the expand/preview view)."""
+    last_day  = calendar.monthrange(year, month)[1]
+    month_str = f"{year}-{str(month).zfill(2)}"
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""
+        SELECT id, name, artist, album, saved_at,
+               tempo, energy, valence, release_year, language
+        FROM tracks
+        WHERE user_id = %s AND saved_at >= %s AND saved_at <= %s
+        ORDER BY saved_at ASC
+    """, (user_id, f"{month_str}-01 00:00:00", f"{month_str}-{last_day} 23:59:59"))
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    return {"tracks": [{
+        "id": r[0], "name": r[1], "artist": r[2], "album": r[3],
+        "saved_at": str(r[4])[:10],
+        "tempo":   round(float(r[5]), 1) if r[5] else None,
+        "energy":  round(float(r[6]), 2) if r[6] else None,
+        "valence": round(float(r[7]), 2) if r[7] else None,
+        "release_year": r[8], "language": r[9],
+        "spotify_url": f"https://open.spotify.com/track/{r[0]}",
+    } for r in rows]}
+
+
+@router.post("/monthly-playlists/create")
+def create_month_playlist(year: int = Query(...), month: int = Query(...),
+                          user_id: str = Query(DEFAULT_USER)):
+    """Explicitly push ONE month's saves to Spotify (only when the user clicks)."""
+    sp  = get_spotify()
+    res = create_or_sync_month(sp, user_id, year, month, force=True)
+    if res["status"] == "skipped_empty":
+        return {"success": False, "message": "No songs saved that month"}
+    if res["status"] == "error":
+        return {"success": False, "message": res.get("error", "Spotify error")}
+    return {"success": True, **res}
+
 @router.get("/duplicates")
 def find_duplicates(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
     conn = get_conn()

@@ -63,35 +63,13 @@ def poll():
     timestamp = datetime.now().strftime('%H:%M:%S')
     print(f"[{timestamp}] Polled — {new_plays} new plays recorded ({len(items)} fetched)")
 
-
-# Track the last day we refreshed the monthly playlist so we only do it once/day
-_last_monthly_sync = None
-
-def maybe_sync_monthly():
-    """Refresh the current month's auto-playlist at most once per calendar day."""
-    global _last_monthly_sync
-    today = datetime.now().date()
-    if _last_monthly_sync == today:
-        return
-    try:
-        from api.routes.library import create_or_sync_month, DEFAULT_USER, get_spotify
-        now = datetime.now()
-        res = create_or_sync_month(get_spotify(), DEFAULT_USER, now.year, now.month, force=True)
-        _last_monthly_sync = today
-        print(f"          Monthly playlist '{now.year}-{str(now.month).zfill(2)}': "
-              f"{res['status']} ({res.get('track_count', 0)} tracks)")
-    except Exception as e:
-        print(f"          Monthly playlist sync skipped: {e}")
-
 def main():
     print("Fidolio poller started. Polling every 30 minutes.")
     print("Leave this terminal open. Ctrl+C to stop.\n")
-    poll()              # run immediately on start
-    maybe_sync_monthly()
+    poll()  # run immediately on start
     while True:
         time.sleep(1800)  # 30 minutes
         poll()
-        maybe_sync_monthly()
 
 if __name__ == "__main__":
     main()
