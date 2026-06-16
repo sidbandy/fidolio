@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from typing import Optional
 import psycopg2, json, os, requests
 from dotenv import load_dotenv
+from core import spotify_api
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
@@ -283,21 +284,7 @@ def taste_score(track_id, profile, cur):
 
 
 def fetch_spotify_tracks(sp, playlist_id):
-    tracks, offset = [], 0
-    while True:
-        resp = sp.playlist_items(
-            playlist_id,
-            fields="items(track(id,name,artists)),next",
-            limit=100, offset=offset,
-        )
-        for item in resp.get("items", []):
-            t = item.get("track")
-            if t and t.get("id"):
-                tracks.append(t)
-        if not resp.get("next"):
-            break
-        offset += 100
-    return tracks
+    return spotify_api.get_items(sp, playlist_id)
 
 
 def query_track_ids(rule, user_id, cur):
@@ -312,12 +299,7 @@ def query_track_ids(rule, user_id, cur):
 
 def replace_spotify_playlist(sp, playlist_id, track_ids):
     """Fully replace a Spotify playlist, including clearing it for empty rules."""
-    sp.playlist_replace_items(playlist_id, [])
-    for i in range(0, len(track_ids), 100):
-        sp.playlist_add_items(
-            playlist_id,
-            [f"spotify:track:{t}" for t in track_ids[i:i+100]],
-        )
+    spotify_api.replace_items(sp, playlist_id, [f"spotify:track:{t}" for t in track_ids])
 
 
 # ─── Request models ───────────────────────────────────────────────────────────
@@ -362,17 +344,15 @@ def create_from_tracks(body: FromTracksBody):
         return {"error": "No tracks to add."}
     try:
         sp = get_spotify()
-        me = sp.current_user()
-        pl = sp.user_playlist_create(
-            me["id"], body.name, public=body.public,
+        pl = spotify_api.create_playlist(
+            sp, body.name, public=body.public,
             description="Created from a Fidolio search",
         )
-        for i in range(0, len(ids), 100):
-            sp.playlist_add_items(pl["id"], [f"spotify:track:{t}" for t in ids[i:i+100]])
+        spotify_api.add_items(sp, pl["id"], [f"spotify:track:{t}" for t in ids])
         return {
             "success":      True,
             "track_count":  len(ids),
-            "playlist_url": pl["external_urls"]["spotify"],
+            "playlist_url": pl["url"],
             "playlist_id":  pl["id"],
         }
     except Exception as e:
@@ -644,13 +624,12 @@ def create_playlist(body: SaveBody):
     if mode == "new" and body.playlist_name:
         try:
             sp          = get_spotify()
-            me          = sp.current_user()
-            pl          = sp.user_playlist_create(
-                me["id"], body.playlist_name, public=False,
+            pl          = spotify_api.create_playlist(
+                sp, body.playlist_name, public=False,
                 description=f"Managed by Fidolio — rule: {body.name}",
             )
             playlist_id  = pl["id"]
-            playlist_url = pl["external_urls"]["spotify"]
+            playlist_url = pl["url"]
         except Exception as e:
             return {"error": spotify_error(e)}
     elif playlist_id:
@@ -750,13 +729,12 @@ def update_playlist(smart_id: int, body: SaveBody):
             curq.close(); connq.close()
 
             sp = get_spotify()
-            me = sp.current_user()
-            pl = sp.user_playlist_create(
-                me["id"], body.playlist_name, public=False,
+            pl = spotify_api.create_playlist(
+                sp, body.playlist_name, public=False,
                 description=f"Managed by Fidolio — rule: {body.name}",
             )
             new_pid = pl["id"]
-            new_url = pl["external_urls"]["spotify"]
+            new_url = pl["url"]
         elif not new_pid:
             cur.close(); conn.close()
             return {"error": "Enter a Spotify playlist name, link an existing playlist, or save rule only."}
@@ -992,11 +970,11 @@ def rotate_playlist(smart_id: int, body: RotateBody):
     replacements = unique[:rot_size]
 
     try:
-        sp.playlist_remove_all_occurrences_of_items(
-            spotify_pid, [f"spotify:track:{t}" for t in eject_ids]
+        spotify_api.remove_items(
+            sp, spotify_pid, [f"spotify:track:{t}" for t in eject_ids]
         )
-        sp.playlist_add_items(
-            spotify_pid, [f"spotify:track:{r}" for r in replacements]
+        spotify_api.add_items(
+            sp, spotify_pid, [f"spotify:track:{r}" for r in replacements]
         )
     except Exception as e:
         return {"error": spotify_error(e)}

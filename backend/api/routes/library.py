@@ -4,6 +4,7 @@ import os
 import calendar
 from datetime import datetime
 from dotenv import load_dotenv
+from core import spotify_api
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 router = APIRouter()
@@ -95,27 +96,21 @@ def create_or_sync_month(sp, user_id, year, month, force=False):
     month_name = calendar.month_name[month]
     pl_name    = f"Fidolio: {month_name} {year}"
 
+    uris = [f"spotify:track:{t}" for t in track_ids]
     try:
         if existing and existing[0]:
             playlist_id  = existing[0]
             playlist_url = existing[1]
-            # Replace contents to reflect current saves
-            sp.playlist_replace_items(playlist_id, [])
-            for i in range(0, len(track_ids), 100):
-                sp.playlist_add_items(playlist_id,
-                    [f"spotify:track:{t}" for t in track_ids[i:i+100]])
+            spotify_api.replace_items(sp, playlist_id, uris)
             status = "synced"
         else:
-            me = sp.current_user()
-            pl = sp.user_playlist_create(
-                me["id"], pl_name, public=False,
+            pl = spotify_api.create_playlist(
+                sp, pl_name, public=False,
                 description=f"Everything you saved in {month_name} {year} — auto-built by Fidolio",
             )
             playlist_id  = pl["id"]
-            playlist_url = pl["external_urls"]["spotify"]
-            for i in range(0, len(track_ids), 100):
-                sp.playlist_add_items(playlist_id,
-                    [f"spotify:track:{t}" for t in track_ids[i:i+100]])
+            playlist_url = pl["url"]
+            spotify_api.add_items(sp, playlist_id, uris)
             status = "created"
     except Exception as e:
         cur.close(); conn.close()
@@ -354,17 +349,15 @@ def multi_month_playlist(months: str = Query(...), name: str = Query(""),
 
     try:
         sp = get_spotify()
-        me = sp.current_user()
-        pl = sp.user_playlist_create(me["id"], name, public=False,
+        pl = spotify_api.create_playlist(sp, name, public=False,
             description=f"Saved across {len(ms)} months — built by Fidolio")
-        for i in range(0, len(track_ids), 100):
-            sp.playlist_add_items(pl["id"], [f"spotify:track:{t}" for t in track_ids[i:i+100]])
+        spotify_api.add_items(sp, pl["id"], [f"spotify:track:{t}" for t in track_ids])
         return {"success": True, "track_count": len(track_ids),
-                "playlist_url": pl["external_urls"]["spotify"]}
+                "playlist_url": pl["url"]}
     except Exception as e:
         msg = str(e)
         if "403" in msg or "Forbidden" in msg:
-            msg = "Spotify 403 — re-auth needed (or app write access not yet active)."
+            msg = "Spotify 403 — re-auth needed."
         return {"success": False, "message": msg}
 
 @router.get("/duplicates")

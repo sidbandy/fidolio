@@ -12,6 +12,7 @@ from typing import Optional
 import psycopg2, os, uuid, spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
+from core import spotify_api
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 router = APIRouter()
@@ -452,17 +453,15 @@ def finalize_playlist(
 
     try:
         sp   = get_spotify()
-        me   = sp.current_user()
         name = playlist_name or f"Fidolio Collab: {room[0]}"
-        pl   = sp.user_playlist_create(
-            me["id"], name, public=False,
+        pl   = spotify_api.create_playlist(
+            sp, name, public=False,
             description=f"Collab playlist from Fidolio room {room_id}",
         )
         uris = [f"spotify:track:{t[0]}" for t in tracks]
-        for i in range(0, len(uris), 100):
-            sp.playlist_add_items(pl["id"], uris[i:i+100])
+        spotify_api.add_items(sp, pl["id"], uris)
 
-        url = pl["external_urls"]["spotify"]
+        url = pl["url"]
 
         conn2 = get_conn(); cur2 = conn2.cursor()
         cur2.execute("""
