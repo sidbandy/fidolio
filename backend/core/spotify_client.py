@@ -33,17 +33,33 @@ def bootstrap_cache():
     """
     On a fresh cloud container there's no .cache file. If SPOTIFY_TOKEN_CACHE
     is set (paste your local .cache JSON into that env var), write it to disk
-    once so spotipy can use + refresh it. No-op locally.
+    so spotipy can use + refresh it. No-op locally.
+
+    Sanitizes the value: a `cat .cache` paste often picks up a trailing zsh `%`
+    or stray whitespace, which makes the JSON unparseable ("Extra data"). We
+    trim to the JSON object so it's always valid.
     """
+    import json
     raw = os.getenv("SPOTIFY_TOKEN_CACHE")
+    if not raw:
+        return
+    raw = raw.strip()
+    # Trim anything after the final closing brace (e.g. a trailing '%')
+    if not raw.endswith("}") and "}" in raw:
+        raw = raw[: raw.rfind("}") + 1]
+    try:
+        json.loads(raw)  # validate before writing
+    except Exception as e:
+        print(f"[spotify] SPOTIFY_TOKEN_CACHE is not valid JSON: {e}")
+        return
     path = resolve_cache_path()
-    if raw and not os.path.exists(path):
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
-                f.write(raw)
-        except Exception as e:
-            print(f"[spotify] could not write token cache: {e}")
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # Always (re)write so a corrupted cache from a prior boot is replaced
+        with open(path, "w") as f:
+            f.write(raw)
+    except Exception as e:
+        print(f"[spotify] could not write token cache: {e}")
 
 
 def get_spotify_client():
