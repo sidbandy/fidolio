@@ -44,6 +44,13 @@ def main():
     conn.commit(); cur.close(); conn.close()
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {new_plays} new plays ({len(items)} fetched)")
 
+    # Also keep the saved-tracks library current (incremental — cheap when nothing new)
+    try:
+        from sync_library import sync_saved_tracks
+        sync_saved_tracks()
+    except Exception as e:
+        print(f"  library sync skipped: {e}")
+
 
 if __name__ == "__main__":
     main()
