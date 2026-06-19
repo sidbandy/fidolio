@@ -132,7 +132,7 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
         FROM tracks WHERE user_id = %s
         GROUP BY artist HAVING COUNT(*) >= 5
         ORDER BY (MAX(saved_at) - MIN(saved_at)) ASC
-        LIMIT 5
+        LIMIT 30
     """, (user_id,))
     rabbit_holes = [{
         "artist": r[0], "songs_saved": r[1],

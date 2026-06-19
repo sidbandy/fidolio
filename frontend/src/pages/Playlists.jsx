@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
+import useMediaQuery from "../hooks/useMediaQuery";
+import { MOBILE_Q } from "../components/Spine";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -842,6 +844,7 @@ function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Playlists({ embedded = false }) {
+  const isMobile = useMediaQuery(MOBILE_Q);
   const [tab,        setTab]        = useState("builder");
   const [conditions, setConditions] = useState([]);
   const [excludes,   setExcludes]   = useState([]);
@@ -1094,7 +1097,7 @@ export default function Playlists({ embedded = false }) {
 
       {/* ── BUILDER TAB ────────────────────────────────────────────────────── */}
       {tab === "builder" && (
-        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr",
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "340px 1fr",
           gap: "16px", alignItems: "start" }}>
 
           {/* Left: rule builder */}

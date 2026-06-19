@@ -13,3 +13,4 @@ export { default as CountUp } from "./CountUp";
 export { default as PullQuote } from "./PullQuote";
 export { default as Department } from "./Department";
 export { default as Expander } from "./Expander";
+export { default as InfoTip } from "./InfoTip";
