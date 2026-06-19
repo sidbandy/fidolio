@@ -22,6 +22,49 @@ def get_conn():
     return psycopg2.connect(DB_URL)
 
 
+# ── Niche mood matrix ─────────────────────────────────────────────────────────
+# Composite of audio features (valence/energy/tempo/acousticness/danceability).
+# A track can match several moods; each is applied strictly when the metrics fit.
+MOODS = [
+    ("euphoric",   "Euphoric",   "valence>=0.7 AND energy>=0.7 AND danceability>=0.6"),
+    ("hype",       "Hype",       "energy>=0.8 AND tempo>=125 AND danceability>=0.6"),
+    ("anthemic",   "Anthemic",   "valence>=0.6 AND energy>=0.7 AND tempo BETWEEN 100 AND 145"),
+    ("wistful",    "Wistful",    "valence BETWEEN 0.45 AND 0.78 AND energy<=0.45 AND tempo<=108"),
+    ("serene",     "Serene",     "valence>=0.5 AND energy<=0.4 AND acousticness>=0.4"),
+    ("dreamy",     "Dreamy",     "acousticness>=0.5 AND energy<=0.45 AND valence BETWEEN 0.4 AND 0.72"),
+    ("sensual",    "Sensual",    "valence BETWEEN 0.4 AND 0.72 AND danceability>=0.6 AND energy BETWEEN 0.35 AND 0.7 AND tempo<=118"),
+    ("melancholy", "Melancholy", "valence<=0.35 AND energy<=0.45"),
+    ("brooding",   "Brooding",   "valence<=0.42 AND energy BETWEEN 0.45 AND 0.72"),
+    ("aggressive", "Aggressive", "valence<=0.45 AND energy>=0.75 AND tempo>=120"),
+]
+
+
+def compute_moods(valence, energy, tempo, acousticness, danceability):
+    """Python mirror of the MOODS SQL predicates — tags a track in the response."""
+    def _f(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+    v, e, t, a, d = _f(valence), _f(energy), _f(tempo), _f(acousticness), _f(danceability)
+    if v is None or e is None:
+        return []
+    a = a or 0.0
+    d = d or 0.0
+    out = []
+    if v >= 0.7 and e >= 0.7 and d >= 0.6: out.append("euphoric")
+    if e >= 0.8 and t is not None and t >= 125 and d >= 0.6: out.append("hype")
+    if v >= 0.6 and e >= 0.7 and t is not None and 100 <= t <= 145: out.append("anthemic")
+    if 0.45 <= v <= 0.78 and e <= 0.45 and t is not None and t <= 108: out.append("wistful")
+    if v >= 0.5 and e <= 0.4 and a >= 0.4: out.append("serene")
+    if a >= 0.5 and e <= 0.45 and 0.4 <= v <= 0.72: out.append("dreamy")
+    if 0.4 <= v <= 0.72 and d >= 0.6 and 0.35 <= e <= 0.7 and t is not None and t <= 118: out.append("sensual")
+    if v <= 0.35 and e <= 0.45: out.append("melancholy")
+    if v <= 0.42 and 0.45 <= e <= 0.72: out.append("brooding")
+    if v <= 0.45 and e >= 0.75 and t is not None and t >= 120: out.append("aggressive")
+    return out
+
+
 def get_spotify():
     import spotipy
     from spotipy.oauth2 import SpotifyOAuth
@@ -504,6 +547,20 @@ def top_saved_artists(
         for r in rows
     ]}
 
+@router.get("/moods")
+def list_moods(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+    """The niche moods + how many of your analyzed tracks match each (one scan)."""
+    conn = get_conn(); cur = conn.cursor()
+    select = ", ".join(f"COUNT(*) FILTER (WHERE {sql})" for _k, _l, sql in MOODS)
+    cur.execute(f"SELECT {select} FROM tracks WHERE user_id = %s", (user_id,))
+    row = cur.fetchone() or []
+    cur.close(); conn.close()
+    return {"moods": [
+        {"key": k, "label": label, "count": (row[i] if i < len(row) else 0)}
+        for i, (k, label, _s) in enumerate(MOODS)
+    ]}
+
+
 @router.get("/liked-songs")
 def liked_songs(
     user_id: str        = Query("0tz6fep2m5bx1vq85g48518u9"),
@@ -520,6 +577,7 @@ def liked_songs(
     artist: str         = Query(None),
     language: str       = Query(None),
     decades: str        = Query(None),
+    moods: str          = Query(None),
     limit: int          = Query(50, le=200),
     offset: int         = Query(0)
 ):
@@ -565,6 +623,11 @@ def liked_songs(
             params.extend([s, s + 9])
         if ors:
             filters.append("(" + " OR ".join(ors) + ")")
+    if moods:
+        keys = {m.strip() for m in moods.split(",") if m.strip()}
+        preds = [sql for (k, _label, sql) in MOODS if k in keys]
+        if preds:
+            filters.append("(" + " OR ".join(f"({p})" for p in preds) + ")")
 
     valid_sorts = {"saved_at","tempo","energy","valence","danceability","artist","album","name"}
     sort_col  = sort_by if sort_by in valid_sorts else "saved_at"
@@ -602,6 +665,7 @@ def liked_songs(
                 "danceability": round(float(r[8]), 2)  if r[8] else None,
                 "acousticness": round(float(r[9]), 2)  if r[9] else None,
                 "release_year": r[10],
+                "moods":        compute_moods(r[7], r[6], r[5], r[9], r[8]),
                 "spotify_url":  f"https://open.spotify.com/track/{r[0]}"
             }
             for r in rows

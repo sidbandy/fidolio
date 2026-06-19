@@ -41,7 +41,8 @@ export default function Collection() {
   const [sortBy, setSortBy] = useState("saved_at");
   const [order, setOrder] = useState("desc");
   const [decades, setDecades] = useState([]); // [] = all decades
-  const [mood, setMood] = useState("any");
+  const [moods, setMoods] = useState([]);     // niche moods (multi-select)
+  const [moodList, setMoodList] = useState([]);
   const [language, setLanguage] = useState("");
   const [minEnergy, setMinEnergy] = useState("");
   const [maxEnergy, setMaxEnergy] = useState("");
@@ -60,6 +61,8 @@ export default function Collection() {
 
   const toggleDecade = (start) =>
     setDecades((prev) => (prev.includes(start) ? prev.filter((x) => x !== start) : [...prev, start]));
+  const toggleMood = (key) =>
+    setMoods((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
 
   const buildParams = (off = 0) => {
     const p = new URLSearchParams();
@@ -73,8 +76,7 @@ export default function Collection() {
     if (maxEnergy) p.set("max_energy", maxEnergy);
     if (minTempo) p.set("min_tempo", minTempo);
     if (maxTempo) p.set("max_tempo", maxTempo);
-    if (mood === "happy") p.set("min_valence", "0.6");
-    if (mood === "dark") p.set("max_valence", "0.35");
+    if (moods.length) p.set("moods", moods.join(","));
     if (artist) p.set("artist", artist);
     return p;
   };
@@ -92,16 +94,17 @@ export default function Collection() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(0); }, [sortBy, order, decades.join(","), language, mood, minEnergy, maxEnergy, minTempo, maxTempo, artist]);
+  useEffect(() => { load(0); }, [sortBy, order, decades.join(","), language, moods.join(","), minEnergy, maxEnergy, minTempo, maxTempo, artist]);
 
   useEffect(() => {
+    fetch(`${API}/library/moods`).then((r) => r.json()).then((d) => setMoodList(d.moods || []));
     fetch(`${API}/library/duplicates`).then((r) => r.json()).then(setDuplicates);
     fetch(`${API}/library/dead-saves`).then((r) => r.json()).then(setDeadSaves);
     fetch(`${API}/library/top-saved-artists?limit=20`).then((r) => r.json()).then(setTopArtists);
   }, []);
 
   const activeFilterCount =
-    decades.length + (language ? 1 : 0) + (mood !== "any" ? 1 : 0) +
+    decades.length + (language ? 1 : 0) +
     (minEnergy ? 1 : 0) + (maxEnergy ? 1 : 0) + (minTempo ? 1 : 0) + (maxTempo ? 1 : 0) + (artist ? 1 : 0);
 
   const healthTabs = [
@@ -131,6 +134,22 @@ export default function Collection() {
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 24px 64px" }}>
         {mode === "browse" ? (
           <Reveal>
+            {/* Moods — standalone, multi-select (a song can be several) */}
+            <Card style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ ...TYPE.micro }}>Moods — combine any · a song can match several</div>
+                {moods.length > 0 && <button onClick={() => setMoods([])} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer" }}>clear</button>}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {moodList.length === 0 && <span style={{ ...TYPE.body, fontSize: 12 }}>Reading the room…</span>}
+                {moodList.map((m) => (
+                  <Pill key={m.key} active={moods.includes(m.key)} onClick={() => toggleMood(m.key)} style={{ minHeight: 34 }}>
+                    {m.label} <span style={{ opacity: 0.55, marginLeft: 4 }}>{(m.count || 0).toLocaleString()}</span>
+                  </Pill>
+                ))}
+              </div>
+            </Card>
+
             {/* Sort */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               {SORT_OPTIONS.map((s) => (
@@ -153,14 +172,6 @@ export default function Collection() {
                 <Pill key={d.start} active={decades.includes(d.start)} onClick={() => toggleDecade(d.start)} style={{ minHeight: 32, padding: "5px 12px", fontSize: 11 }}>
                   {d.label}
                 </Pill>
-              ))}
-            </div>
-
-            {/* Quick mood + advanced filters */}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
-              <span style={{ ...TYPE.micro, marginRight: 4 }}>Mood</span>
-              {["any", "happy", "dark"].map((m) => (
-                <Pill key={m} active={mood === m} onClick={() => setMood(m)} style={{ minHeight: 32, padding: "5px 12px", fontSize: 11, textTransform: "capitalize" }}>{m}</Pill>
               ))}
             </div>
 

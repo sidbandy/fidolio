@@ -112,9 +112,9 @@ export default function TrackRow({ track, playing, onPlay, rank }) {
       >
         {track.release_year && <Badge>{track.release_year}</Badge>}
         {track.energy != null && <Badge>E {Math.round(track.energy * 100)}%</Badge>}
-        {track.valence != null && (
-          <Badge color={mc}>● {moodKey(track.valence)}</Badge>
-        )}
+        {track.moods?.length
+          ? track.moods.slice(0, 2).map((m) => <Badge key={m} color={mc}>● {m}</Badge>)
+          : track.valence != null && <Badge color={mc}>● {moodKey(track.valence)}</Badge>}
         {track.language && track.language !== "english" && (
           <Badge>{track.language}</Badge>
         )}
