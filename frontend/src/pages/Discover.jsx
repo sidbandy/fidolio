@@ -112,9 +112,10 @@ function SearchView() {
       <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
         <Pill active={mode === "nlp"} onClick={() => { setMode("nlp"); setResults(null); }}>✨ Describe It</Pill>
         <Pill active={mode === "filters"} onClick={() => { setMode("filters"); setResults(null); }}>🎚️ Use Filters</Pill>
-        <Pill active={!!weatherData} onClick={weatherSearch} style={{ marginLeft: "auto", borderColor: weatherData ? C.amber : C.border, background: weatherData ? C.amber : "#151515", color: weatherData ? "#000" : C.sub }}>
-          {weatherLoading ? "Getting weather…" : "🌤️ Match My Weather"}
-        </Pill>
+        <button onClick={weatherSearch} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 9, padding: "10px 18px", borderRadius: 12, border: `1px solid ${weatherData ? C.amber : "#3a2a00"}`, background: weatherData ? C.amber : C.amberBg, color: weatherData ? "#000" : C.amber, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" }}>
+          <WeatherIcon size={20} />
+          {weatherLoading ? "Reading the sky…" : weatherData ? `${Math.round(weatherData.temperature)}°C` : "Match my weather"}
+        </button>
       </div>
 
       {mode === "nlp" && (
@@ -163,8 +164,12 @@ function SearchView() {
       )}
 
       {weatherData && (
-        <div style={{ background: C.amberBg, border: "1px solid #3a3000", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 20 }}>🌤️</span><span style={{ color: C.amber }}>{weatherData.temperature}°C · {weatherData.explanation}</span>
+        <div style={{ background: C.amberBg, border: "1px solid #3a2a00", borderRadius: 14, padding: "16px 20px", marginBottom: 22, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ color: C.amber, flexShrink: 0 }}><WeatherIcon size={40} color={C.amber} /></div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: FONT.display, fontSize: 21, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{Math.round(weatherData.temperature)}°C — matched to your sky</div>
+            <div style={{ fontSize: 13, color: C.amber, marginTop: 3 }}>{weatherData.explanation}</div>
+          </div>
         </div>
       )}
 
@@ -637,9 +642,43 @@ function DeeperView() {
   );
 }
 
+/* ─────────────────────────── FIND (search + albums merged) ─────────────────────────── */
+const subTab = (active) => ({
+  padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer",
+  fontSize: 13, fontWeight: 700, fontFamily: FONT.body,
+  background: active ? C.green : "transparent", color: active ? "#000" : C.sub,
+  transition: "all 0.15s",
+});
+
+function WeatherIcon({ size = 22, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="7.5" cy="8" r="3" />
+      <line x1="7.5" y1="2.4" x2="7.5" y2="3.6" />
+      <line x1="2" y1="8" x2="3.2" y2="8" />
+      <line x1="3.6" y1="4.1" x2="4.4" y2="4.9" />
+      <line x1="11.4" y1="4.1" x2="10.6" y2="4.9" />
+      <path d="M16.5 19.5H10a3.5 3.5 0 0 1 0-7 4.5 4.5 0 0 1 8.7 1.4A3 3 0 0 1 16.5 19.5z" />
+    </svg>
+  );
+}
+
+function FindView() {
+  const [sub, setSub] = useState("library");
+  return (
+    <div>
+      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 24 }}>
+        <button onClick={() => setSub("library")} style={subTab(sub === "library")}>Library search</button>
+        <button onClick={() => setSub("album")} style={subTab(sub === "album")}>Album explorer</button>
+      </div>
+      {sub === "library" ? <SearchView /> : <AlbumsView />}
+    </div>
+  );
+}
+
 /* ─────────────────────────── SHELL ─────────────────────────── */
 export default function Discover() {
-  const [mode, setMode] = useState("search");
+  const [mode, setMode] = useState("find");
   return (
     <div style={{ background: C.bg, minHeight: "100vh" }}>
       <div style={{ background: MOOD.dark.tint, borderBottom: `1px solid ${C.border}` }}>
@@ -651,8 +690,7 @@ export default function Discover() {
             lede="Search your library, get recommendations tuned to your taste, and vet any album before you commit."
             actions={
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Pill active={mode === "search"} onClick={() => setMode("search")}>Search</Pill>
-                <Pill active={mode === "albums"} onClick={() => setMode("albums")}>Albums</Pill>
+                <Pill active={mode === "find"} onClick={() => setMode("find")}>Find</Pill>
                 <Pill active={mode === "blindspots"} onClick={() => setMode("blindspots")}>Blind Spots</Pill>
                 <Pill active={mode === "deeper"} onClick={() => setMode("deeper")}>Deeper</Pill>
               </div>
@@ -661,8 +699,7 @@ export default function Discover() {
         </div>
       </div>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 24px 64px" }}>
-        {mode === "search" && <SearchView />}
-        {mode === "albums" && <AlbumsView />}
+        {mode === "find" && <FindView />}
         {mode === "blindspots" && <BlindSpotsView />}
         {mode === "deeper" && <DeeperView />}
       </div>

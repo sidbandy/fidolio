@@ -99,21 +99,22 @@ export default function NowPlaying({ variant = "bar" }) {
   // ── PANEL: rich card embedded at the bottom of the spine sidebar ──
   if (variant === "panel") {
     return (
-      <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0 }}>
-        {/* Animated, blurred album-art backdrop (the "motion graphic") */}
+      <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+        {/* Animated, blurred album-art backdrop — fills the sidebar as an ambient glow */}
         {track.album_art && (
           <div
             className="kenburns"
             style={{
               position: "absolute", inset: "-30%", backgroundImage: `url(${track.album_art})`,
               backgroundSize: "cover", backgroundPosition: "center",
-              filter: "blur(28px) brightness(0.5) saturate(1.25)", opacity: 0.6, zIndex: 0,
+              filter: "blur(30px) brightness(0.55) saturate(1.3)", opacity: 0.5, zIndex: 0,
             }}
           />
         )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(8,8,8,0.97), rgba(8,8,8,0.5))", zIndex: 0 }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(8,8,8,0.45), rgba(8,8,8,0.98))", zIndex: 0 }} />
 
         <div style={{ position: "relative", zIndex: 1, padding: 14 }}>
+          <div style={{ fontFamily: FONT.body, fontSize: 10, fontWeight: 700, letterSpacing: "1.6px", textTransform: "uppercase", color: C.green, marginBottom: 10 }}>Now Playing</div>
           {/* Album art with progress + title/artist overlay */}
           <div style={{ position: "relative", borderRadius: 11, overflow: "hidden", boxShadow: "0 10px 28px rgba(0,0,0,0.55)" }}>
             {track.album_art

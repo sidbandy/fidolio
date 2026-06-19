@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, BackgroundTasks
 import psycopg2
+import requests
 import os
 import calendar
 from datetime import datetime
@@ -63,6 +64,29 @@ def compute_moods(valence, energy, tempo, acousticness, danceability):
     if v <= 0.42 and 0.45 <= e <= 0.72: out.append("brooding")
     if v <= 0.45 and e >= 0.75 and t is not None and t >= 120: out.append("aggressive")
     return out
+
+
+# ── Artist photos (Deezer proxy + cache) — powers the Top Artists cards ──
+_ARTIST_IMG_CACHE = {}
+
+
+@router.get("/artist-image")
+def artist_image(name: str):
+    key = (name or "").strip().lower()
+    if not key:
+        return {"name": name, "image": None}
+    if key in _ARTIST_IMG_CACHE:
+        return {"name": name, "image": _ARTIST_IMG_CACHE[key]}
+    img = None
+    try:
+        r = requests.get("https://api.deezer.com/search/artist", params={"q": name, "limit": 1}, timeout=6)
+        data = r.json().get("data", [])
+        if data:
+            img = data[0].get("picture_medium") or data[0].get("picture_big") or data[0].get("picture")
+    except Exception:
+        pass
+    _ARTIST_IMG_CACHE[key] = img
+    return {"name": name, "image": img}
 
 
 def get_spotify():

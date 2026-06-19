@@ -61,7 +61,7 @@ function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
           </div>
         </div>
 
-        <nav style={{ marginTop: 34, padding: "0 22px", display: "flex", flexDirection: "column", gap: 4, flex: 1, overflowY: "auto", minHeight: 0 }}>
+        <nav style={{ marginTop: 34, padding: "0 22px", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
           {sections.map((s) => {
             const active = isActive(pathname, s.to);
             return (
