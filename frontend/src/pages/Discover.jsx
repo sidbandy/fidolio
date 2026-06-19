@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
 import { C, TYPE, FONT, MOOD, input } from "../theme";
-import { PageHeader, Card, Pill, Department, Expander, Input, Button, TrackRow, EmptyState, Modal, Reveal } from "../ui";
+import { useRef } from "react";
+import { PageHeader, Card, Pill, Department, Expander, Input, Button, TrackRow, EmptyState, Modal, Reveal, FlipCard } from "../ui";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const LIMIT = 50;
@@ -418,60 +419,217 @@ function AlbumsView() {
   );
 }
 
-/* ─────────────────────────── BLIND SPOTS ─────────────────────────── */
+/* ─────────────────────────── BLIND SPOTS (flip cards) ─────────────────────────── */
+const chip = { fontSize: 11, color: "#fff", background: "#151515", border: `1px solid ${C.border}`, padding: "3px 9px", borderRadius: 10, whiteSpace: "nowrap" };
+const faceHint = { marginTop: "auto", ...TYPE.micro, color: C.muted, paddingTop: 10, textAlign: "right" };
+
+function BlindFront({ spot, meaning, meaningOpen, onInfo }) {
+  return (
+    <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, textTransform: "capitalize", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis" }}>{spot.genre}</div>
+          <button onClick={(e) => { e.stopPropagation(); onInfo(); }} aria-label="What does this mean?"
+            style={{ width: 18, height: 18, borderRadius: "50%", border: `1px solid ${C.border2}`, background: meaningOpen ? C.green : "transparent", color: meaningOpen ? "#000" : C.sub, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, lineHeight: 1 }}>i</button>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 700, color: C.indigo }}>{spot.songs_in_library}</div>
+          <div style={{ ...TYPE.micro, color: C.faint }}>songs</div>
+        </div>
+      </div>
+      {meaningOpen && (
+        <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5, marginTop: 8, background: "#151515", borderRadius: 8, padding: "8px 10px" }}>
+          {meaning === undefined ? "Loading…" : meaning || "No quick definition found."}
+        </div>
+      )}
+      <div style={{ ...TYPE.micro, marginTop: 14, marginBottom: 6 }}>You have it via</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+        {spot.artists_you_have.slice(0, 4).map((a) => <span key={a} style={chip}>{a}</span>)}
+      </div>
+      {spot.songs?.length > 0 && (
+        <>
+          <div style={{ ...TYPE.micro, marginBottom: 6 }}>Best-fit songs you own</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            {spot.songs.slice(0, 3).map((s, i) => (
+              <div key={i} style={{ fontSize: 12, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ color: "#fff" }}>{s.name}</span> · {s.artist}</div>
+            ))}
+          </div>
+        </>
+      )}
+      <div style={faceHint}>tap to flip ⤿</div>
+    </div>
+  );
+}
+
+function BlindBack({ spot, det }) {
+  const loading = !det || det.loading;
+  return (
+    <div style={{ height: "100%", background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ ...TYPE.micro, color: C.green, marginBottom: 4 }}>Go deeper into {spot.genre}</div>
+      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 14 }}>Niche artists you'd likely love — you don't own these yet:</div>
+      {loading ? <div style={{ ...TYPE.body, fontSize: 12 }}>Finding artists…</div> :
+        det.recommended_artists?.length ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {det.recommended_artists.map((a, i) => (
+              <a key={a} href={`https://open.spotify.com/search/${encodeURIComponent(a)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+                <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.green, width: 16 }}>{i + 1}</span>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a}</span>
+                <span style={{ fontSize: 11, color: C.green }}>↗</span>
+              </a>
+            ))}
+          </div>
+        ) : <div style={{ ...TYPE.body, fontSize: 12 }}>No fresh recommendations found.</div>}
+      <div style={faceHint}>tap to flip back ⤾</div>
+    </div>
+  );
+}
+
 function BlindSpotsView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [flipped, setFlipped] = useState({});
+  const [meaningOpen, setMeaningOpen] = useState({});
+  const [details, setDetails] = useState({});
+  const requested = useRef(new Set());
 
   useEffect(() => {
-    fetch(`${API}/albums/blind-spots?limit=12`)
-      .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    fetch(`${API}/albums/blind-spots`).then((r) => r.json()).then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
+
+  const all = data?.blind_spots || [];
+  const pageSize = 5;
+  const pages = Math.max(1, Math.ceil(all.length / pageSize));
+  const shown = all.slice(page * pageSize, page * pageSize + pageSize);
+
+  const loadDetail = (spot) => {
+    if (requested.current.has(spot.genre)) return;
+    requested.current.add(spot.genre);
+    setDetails((d) => ({ ...d, [spot.genre]: { loading: true } }));
+    fetch(`${API}/albums/blind-spot-detail?genre=${encodeURIComponent(spot.genre)}&artists=${encodeURIComponent(spot.artists_you_have.join(","))}`)
+      .then((r) => r.json()).then((det) => setDetails((d) => ({ ...d, [spot.genre]: det })))
+      .catch(() => setDetails((d) => ({ ...d, [spot.genre]: { meaning: null, recommended_artists: [] } })));
+  };
+
+  useEffect(() => { shown.forEach(loadDetail); /* eslint-disable-next-line */ }, [page, data]);
 
   return (
     <Reveal>
-      <p style={{ ...TYPE.body, marginBottom: 22, maxWidth: 640 }}>
-        Niche genres you've brushed against but never explored — pulled from Last.fm tags on your top
-        artists. Here's what each one actually is, and what you already own from it.
-      </p>
-      {loading && <div style={{ ...TYPE.body }}>Analyzing your taste… (this one takes a few seconds)</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 10, flexWrap: "wrap" }}>
+        <p style={{ ...TYPE.body, maxWidth: 520, margin: 0 }}>Niche genres you've brushed against. Tap a card to flip it and see who to explore next.</p>
+        {pages > 1 && <Button variant="ghost" onClick={() => { setPage((p) => (p + 1) % pages); setFlipped({}); setMeaningOpen({}); }}>↻ 5 different ones</Button>}
+      </div>
+      {loading && <div style={{ ...TYPE.body }}>Analyzing your taste… (first load takes a few seconds)</div>}
       {data?.error && <EmptyState title="Blind spots unavailable" hint={data.error} />}
-      {!loading && data?.blind_spots?.length === 0 && <EmptyState title="No blind spots found yet" hint="Save a wider range of artists and check back." />}
-      {data?.blind_spots?.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 14 }}>
-          {data.blind_spots.map((spot, i) => (
-            <Card key={i}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-                <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, textTransform: "capitalize", letterSpacing: "-0.01em" }}>{spot.genre}</div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontFamily: FONT.display, fontSize: 22, fontWeight: 700, color: C.indigo }}>{spot.songs_in_library}</div>
-                  <div style={{ ...TYPE.micro, color: C.faint }}>songs · {spot.artist_count ?? spot.artists_you_have.length} artists</div>
-                </div>
-              </div>
-              {spot.description && (
-                <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.55, marginBottom: 14 }}>{spot.description}</p>
-              )}
-              <div style={{ ...TYPE.micro, marginBottom: 6 }}>Artists you have</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: spot.songs?.length ? 14 : 0 }}>
-                {spot.artists_you_have.map((a) => (
-                  <span key={a} style={{ fontSize: 11, color: "#fff", background: "#151515", border: `1px solid ${C.border}`, padding: "3px 9px", borderRadius: 10 }}>{a}</span>
-                ))}
-              </div>
-              {spot.songs?.length > 0 && (
-                <>
-                  <div style={{ ...TYPE.micro, marginBottom: 6 }}>Your songs in this genre</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {spot.songs.slice(0, 6).map((s, j) => (
-                      <div key={j} style={{ fontSize: 12, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <span style={{ color: "#fff" }}>{s.name}</span> · {s.artist}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Card>
+      {!loading && all.length === 0 && <EmptyState title="No blind spots found yet" hint="Save a wider range of artists and check back." />}
+      {shown.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+          {shown.map((spot) => {
+            const det = details[spot.genre];
+            return (
+              <FlipCard key={spot.genre} height={300} flipped={!!flipped[spot.genre]}
+                onFlip={() => { loadDetail(spot); setFlipped((f) => ({ ...f, [spot.genre]: !f[spot.genre] })); }}
+                front={<BlindFront spot={spot} meaning={det && !det.loading ? det.meaning : undefined} meaningOpen={!!meaningOpen[spot.genre]} onInfo={() => { loadDetail(spot); setMeaningOpen((m) => ({ ...m, [spot.genre]: !m[spot.genre] })); }} />}
+                back={<BlindBack spot={spot} det={det} />}
+              />
+            );
+          })}
+        </div>
+      )}
+    </Reveal>
+  );
+}
+
+/* ─────────────────────────── DEEPER (rabbit holes) ─────────────────────────── */
+function DeeperFront({ h, rank, maxSaved }) {
+  const days = Math.max(0, Math.round((new Date(h.last_save) - new Date(h.first_save)) / 86400000));
+  return (
+    <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...TYPE.micro, color: C.faint }}>Nº {String(rank).padStart(2, "0")}</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 22, fontWeight: 800, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.artist}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: FONT.display, fontSize: 26, fontWeight: 700, color: C.green }}>{h.songs_saved}</div>
+          <div style={{ ...TYPE.micro, color: C.faint }}>saved</div>
+        </div>
+      </div>
+      <div style={{ height: 4, background: C.border, borderRadius: 2, marginTop: 14 }}>
+        <div style={{ height: 4, borderRadius: 2, background: C.green, width: `${(h.songs_saved / maxSaved) * 100}%` }} />
+      </div>
+      <div style={{ fontSize: 12.5, color: C.sub, marginTop: 14, lineHeight: 1.5 }}>
+        {days === 0 ? `You saved ${h.songs_saved} of their songs in one sitting on ${h.first_save}.` : `You binged ${h.songs_saved} of their songs over ${days} day${days === 1 ? "" : "s"} — ${h.first_save} → ${h.last_save}.`}
+      </div>
+      <div style={faceHint}>tap for what's next ⤿</div>
+    </div>
+  );
+}
+
+function DeeperBack({ h, data }) {
+  const loading = !data || data.loading;
+  return (
+    <div style={{ height: "100%", background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ ...TYPE.micro, color: C.green, marginBottom: 10 }}>Continue down the {h.artist} hole</div>
+      {loading ? <div style={{ ...TYPE.body, fontSize: 12 }}>Finding their best tracks…</div> :
+        data.tracks?.length ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {data.tracks.map((t, i) => (
+              <a key={i} href={`https://open.spotify.com/search/${encodeURIComponent(h.artist + " " + t.name)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+                <span style={{ fontFamily: FONT.display, fontSize: 12, fontWeight: 700, color: C.green, width: 16 }}>{i + 1}</span>
+                <span style={{ flex: 1, fontSize: 13, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                {t.owned ? <span style={{ fontSize: 9, color: C.green, border: `1px solid ${C.greenBd}`, padding: "1px 5px", borderRadius: 4 }}>OWNED</span> : <span style={{ fontSize: 11, color: C.green }}>↗</span>}
+              </a>
+            ))}
+          </div>
+        ) : <div style={{ ...TYPE.body, fontSize: 12 }}>Couldn't find their top tracks.</div>}
+      <div style={faceHint}>tap to flip back ⤾</div>
+    </div>
+  );
+}
+
+function DeeperView() {
+  const [holes, setHoles] = useState(null);
+  const [page, setPage] = useState(0);
+  const [flipped, setFlipped] = useState({});
+  const [tracks, setTracks] = useState({});
+  const requested = useRef(new Set());
+
+  useEffect(() => {
+    fetch(`${API}/stats/sonic-identity`).then((r) => r.json()).then((d) => setHoles(d.rabbit_holes || [])).catch(() => setHoles([]));
+  }, []);
+
+  const all = holes || [];
+  const pageSize = 5;
+  const pages = Math.max(1, Math.ceil(all.length / pageSize));
+  const shown = all.slice(page * pageSize, page * pageSize + pageSize);
+  const maxSaved = all.length ? Math.max(...all.map((h) => h.songs_saved)) : 1;
+
+  const loadTracks = (artist) => {
+    if (requested.current.has(artist)) return;
+    requested.current.add(artist);
+    setTracks((t) => ({ ...t, [artist]: { loading: true } }));
+    fetch(`${API}/albums/artist-top-tracks?artist=${encodeURIComponent(artist)}`).then((r) => r.json())
+      .then((d) => setTracks((t) => ({ ...t, [artist]: d }))).catch(() => setTracks((t) => ({ ...t, [artist]: { tracks: [] } })));
+  };
+  useEffect(() => { shown.forEach((h) => loadTracks(h.artist)); /* eslint-disable-next-line */ }, [page, holes]);
+
+  return (
+    <Reveal>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 10, flexWrap: "wrap" }}>
+        <p style={{ ...TYPE.body, maxWidth: 520, margin: 0 }}>Artists you binged hardest. Tap to flip and see which of their tracks to play next.</p>
+        {pages > 1 && <Button variant="ghost" onClick={() => { setPage((p) => (p + 1) % pages); setFlipped({}); }}>↻ 5 different ones</Button>}
+      </div>
+      {!holes && <div style={{ ...TYPE.body }}>Loading…</div>}
+      {holes && all.length === 0 && <EmptyState title="No rabbit holes yet" hint="Save a bunch of one artist in a short window and they'll show up." />}
+      {shown.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+          {shown.map((h, idx) => (
+            <FlipCard key={h.artist} height={260} flipped={!!flipped[h.artist]}
+              onFlip={() => { loadTracks(h.artist); setFlipped((f) => ({ ...f, [h.artist]: !f[h.artist] })); }}
+              front={<DeeperFront h={h} rank={page * pageSize + idx + 1} maxSaved={maxSaved} />}
+              back={<DeeperBack h={h} data={tracks[h.artist]} />}
+            />
           ))}
         </div>
       )}
@@ -496,6 +654,7 @@ export default function Discover() {
                 <Pill active={mode === "search"} onClick={() => setMode("search")}>Search</Pill>
                 <Pill active={mode === "albums"} onClick={() => setMode("albums")}>Albums</Pill>
                 <Pill active={mode === "blindspots"} onClick={() => setMode("blindspots")}>Blind Spots</Pill>
+                <Pill active={mode === "deeper"} onClick={() => setMode("deeper")}>Deeper</Pill>
               </div>
             }
           />
@@ -505,6 +664,7 @@ export default function Discover() {
         {mode === "search" && <SearchView />}
         {mode === "albums" && <AlbumsView />}
         {mode === "blindspots" && <BlindSpotsView />}
+        {mode === "deeper" && <DeeperView />}
       </div>
     </div>
   );

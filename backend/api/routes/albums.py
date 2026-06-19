@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-import psycopg2, requests, os
+import psycopg2, requests, os, time, re
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
@@ -187,46 +187,41 @@ def explore_album(
     }
 
 
+_BS_CACHE = {}   # user_id -> (timestamp, blind_spots)
+_BS_TTL = 3600
+
+
 @router.get("/blind-spots")
-def get_blind_spots(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
-    limit:   int = Query(10)
-):
+def get_blind_spots(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+    """All blind-spot genres (cheap fields) + 3 example songs each. Cached 1h since
+    the Last.fm tag aggregation is slow. Meaning + artist recs are lazy, per-card,
+    from /blind-spot-detail."""
     if not LASTFM_KEY:
         return {"error": "Last.fm API key not configured"}
 
-    conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("""
-        SELECT artist, COUNT(*) as songs
-        FROM tracks WHERE user_id = %s
-        GROUP BY artist ORDER BY songs DESC LIMIT 50
-    """, (user_id,))
+    cached = _BS_CACHE.get(user_id)
+    if cached and (time.time() - cached[0] < _BS_TTL):
+        return {"blind_spots": cached[1], "total_found": len(cached[1]), "cached": True}
+
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""SELECT artist, COUNT(*) FROM tracks WHERE user_id = %s
+                   GROUP BY artist ORDER BY COUNT(*) DESC LIMIT 50""", (user_id,))
     top_artists = cur.fetchall()
-    cur.close()
-    conn.close()
 
-    tag_counts  = {}
-    tag_artists = {}
-    SKIP_TAGS   = {"seen live", "albums i own", "favorites", "love", "awesome",
-                   "favorite", "under 2000 listeners", "spotify", "all"}
-
+    tag_counts, tag_artists = {}, {}
+    SKIP_TAGS = {"seen live", "albums i own", "favorites", "love", "awesome",
+                 "favorite", "under 2000 listeners", "spotify", "all"}
     for artist, song_count in top_artists:
         try:
             resp = requests.get("http://ws.audioscrobbler.com/2.0/", params={
-                "method":  "artist.getTopTags",
-                "artist":  artist,
-                "api_key": LASTFM_KEY,
-                "format":  "json"
-            }, timeout=5)
-            tags = resp.json().get("toptags", {}).get("tag", [])
-            for tag in tags[:8]:
+                "method": "artist.getTopTags", "artist": artist,
+                "api_key": LASTFM_KEY, "format": "json"}, timeout=5)
+            for tag in resp.json().get("toptags", {}).get("tag", [])[:8]:
                 name = tag["name"].lower()
                 if name in SKIP_TAGS:
                     continue
                 tag_counts[name] = tag_counts.get(name, 0) + song_count
-                if name not in tag_artists:
-                    tag_artists[name] = []
+                tag_artists.setdefault(name, [])
                 if artist not in tag_artists[name]:
                     tag_artists[name].append(artist)
         except Exception:
@@ -234,50 +229,105 @@ def get_blind_spots(
 
     blind_spots = []
     for tag, count in tag_counts.items():
-        artist_count = len(tag_artists[tag])
-        if 1 <= artist_count <= 5 and count < 50:
+        ac = len(tag_artists[tag])
+        if 1 <= ac <= 5 and count < 50:
+            try:
+                cur.execute("""SELECT name, artist FROM tracks
+                               WHERE user_id = %s AND artist = ANY(%s)
+                               ORDER BY saved_at DESC LIMIT 3""", (user_id, tag_artists[tag]))
+                songs = [{"name": n, "artist": a} for n, a in cur.fetchall()]
+            except Exception:
+                songs = []
             blind_spots.append({
-                "genre":           tag,
-                "artists_you_have": tag_artists[tag],
-                "songs_in_library": count,
+                "genre": tag, "artists_you_have": tag_artists[tag],
+                "artist_count": ac, "songs_in_library": count, "songs": songs,
             })
-
-    blind_spots.sort(key=lambda x: x["songs_in_library"], reverse=True)
-    top = blind_spots[:limit]
-
-    # Enrich the surfaced blind spots: what the genre means + your songs in it.
-    import re
-    conn = get_conn(); cur = conn.cursor()
-    for bs in top:
-        # Plain-language meaning via Last.fm tag.getInfo
-        try:
-            r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
-                "method": "tag.getInfo", "tag": bs["genre"],
-                "api_key": LASTFM_KEY, "format": "json",
-            }, timeout=5)
-            summary = r.json().get("tag", {}).get("wiki", {}).get("summary", "") or ""
-            summary = re.sub(r"<.*?>", "", summary).split("Read more")[0].strip()
-            bs["description"] = summary or None
-        except Exception:
-            bs["description"] = None
-        # Example songs you own in this genre (by the artists tagged with it)
-        try:
-            cur.execute("""
-                SELECT name, artist FROM tracks
-                WHERE user_id = %s AND artist = ANY(%s)
-                ORDER BY saved_at DESC LIMIT 12
-            """, (user_id, bs["artists_you_have"]))
-            bs["songs"] = [{"name": n, "artist": a} for n, a in cur.fetchall()]
-        except Exception:
-            bs["songs"] = []
-        bs["artist_count"] = len(bs["artists_you_have"])
     cur.close(); conn.close()
 
-    return {
-        "blind_spots":  top,
-        "total_found":  len(blind_spots),
-        "message":      "Genres you've touched but never gone deep on"
-    }
+    blind_spots.sort(key=lambda x: x["songs_in_library"], reverse=True)
+    _BS_CACHE[user_id] = (time.time(), blind_spots)
+    return {"blind_spots": blind_spots, "total_found": len(blind_spots)}
+
+
+@router.get("/blind-spot-detail")
+def blind_spot_detail(
+    genre: str,
+    artists: str = "",
+    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+):
+    """One-sentence meaning of a genre + niche artists (similar to YOUR artists in
+    that genre) you don't already own — accurate next-step recommendations."""
+    meaning = None
+    if LASTFM_KEY:
+        try:
+            r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
+                "method": "tag.getInfo", "tag": genre,
+                "api_key": LASTFM_KEY, "format": "json"}, timeout=6)
+            summary = r.json().get("tag", {}).get("wiki", {}).get("summary", "") or ""
+            summary = re.sub(r"<.*?>", "", summary).split("Read more")[0].strip()
+            if summary:
+                first = summary.split(". ")[0].strip().rstrip(".")
+                meaning = (first + ".") if first else None
+        except Exception:
+            pass
+
+    seed = [a.strip() for a in artists.split(",") if a.strip()][:2]
+    recs = {}
+    if LASTFM_KEY:
+        for a in seed:
+            try:
+                r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
+                    "method": "artist.getSimilar", "artist": a, "limit": 15,
+                    "api_key": LASTFM_KEY, "format": "json"}, timeout=6)
+                for sim in r.json().get("similarartists", {}).get("artist", []):
+                    nm = sim.get("name")
+                    if nm:
+                        recs[nm] = recs.get(nm, 0.0) + float(sim.get("match", 0) or 0)
+            except Exception:
+                continue
+
+    owned = set()
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute("SELECT DISTINCT LOWER(artist) FROM tracks WHERE user_id = %s", (user_id,))
+        owned = {row[0] for row in cur.fetchall()}
+        cur.close(); conn.close()
+    except Exception:
+        pass
+
+    ranked = sorted(((nm, sc) for nm, sc in recs.items() if nm.lower() not in owned),
+                    key=lambda x: -x[1])
+    return {"genre": genre, "meaning": meaning,
+            "recommended_artists": [nm for nm, _ in ranked[:5]]}
+
+
+@router.get("/artist-top-tracks")
+def artist_top_tracks(artist: str, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+    """An artist's best tracks (Last.fm) + whether you already own each — powers the
+    rabbit-hole 'listen next' flip."""
+    names = []
+    if LASTFM_KEY:
+        try:
+            r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
+                "method": "artist.getTopTracks", "artist": artist, "limit": 8,
+                "api_key": LASTFM_KEY, "format": "json"}, timeout=6)
+            for t in r.json().get("toptracks", {}).get("track", []):
+                if t.get("name"):
+                    names.append(t["name"])
+        except Exception:
+            pass
+
+    owned = set()
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute("SELECT LOWER(name) FROM tracks WHERE user_id = %s AND LOWER(artist) = LOWER(%s)",
+                    (user_id, artist))
+        owned = {row[0] for row in cur.fetchall()}
+        cur.close(); conn.close()
+    except Exception:
+        pass
+
+    return {"artist": artist, "tracks": [{"name": n, "owned": n.lower() in owned} for n in names[:6]]}
 
 
 @router.get("/debug-lastfm")
