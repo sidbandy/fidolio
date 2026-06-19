@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from "recharts";
 import usePreview from "../hooks/usePreview";
 import { C, TYPE, FONT, MOOD } from "../theme";
-import { PageHeader, StatBlock, Card, Pill, Department, Expander, TrackRow, EmptyState, PullQuote, Reveal } from "../ui";
+import { PageHeader, StatBlock, Card, Button, Pill, Department, Expander, TrackRow, EmptyState, PullQuote, Reveal } from "../ui";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const PINK = "#ec4899";

@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { C } from "./theme";
 import useMediaQuery from "./hooks/useMediaQuery";
 import Spine, { SIDEBAR, MOBILE_Q } from "./components/Spine";
 import NowPlaying from "./components/NowPlaying";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // The five magazine sections
 import Identity from "./pages/Identity";
@@ -14,6 +15,7 @@ import CollabPage from "./pages/Collab"; // shared collab-room deep links
 
 function Shell() {
   const isMobile = useMediaQuery(MOBILE_Q);
+  const { pathname } = useLocation();
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: "#fff" }}>
       <Spine />
@@ -25,6 +27,7 @@ function Shell() {
           minHeight: "100vh",
         }}
       >
+        <ErrorBoundary key={pathname}>
         <Routes>
           {/* Sections */}
           <Route path="/" element={<Identity />} />
@@ -47,6 +50,7 @@ function Shell() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </main>
       <NowPlaying />
     </div>

@@ -5,11 +5,12 @@ import useMediaQuery from "../hooks/useMediaQuery";
 
 export const SIDEBAR = 232;
 export const MOBILE_Q = "(max-width: 860px)";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // The five magazine sections (single source of truth for nav).
 export const SECTIONS = [
   { n: "01", to: "/",           label: "Identity",   dek: "fingerprint + live wrapped" },
-  { n: "02", to: "/collection", label: "Collection", dek: "11,770 songs, browsable" },
+  { n: "02", to: "/collection", label: "Collection", dek: "browse your whole library" },
   { n: "03", to: "/discover",   label: "Discover",   dek: "search · vibes · albums" },
   { n: "04", to: "/timeline",   label: "Timeline",   dek: "eras + monthly rewind" },
   { n: "05", to: "/playlists",  label: "Playlists",  dek: "builder + collab rooms" },
@@ -37,7 +38,7 @@ function Wordmark({ size = 22 }) {
 }
 
 // ---- Desktop: fixed vertical "spine" contents column ----
-function DesktopSpine({ pathname }) {
+function DesktopSpine({ pathname, sections }) {
   return (
     <aside
       style={{
@@ -50,7 +51,7 @@ function DesktopSpine({ pathname }) {
       <div style={{ ...TYPE.micro, color: C.green, marginTop: 10 }}>{issueLine()}</div>
 
       <nav style={{ marginTop: 44, display: "flex", flexDirection: "column", gap: 4 }}>
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const active = isActive(pathname, s.to);
           return (
             <Link
@@ -86,9 +87,9 @@ function DesktopSpine({ pathname }) {
 }
 
 // ---- Mobile: slim top bar + full-screen index overlay ----
-function MobileSpine({ pathname }) {
+function MobileSpine({ pathname, sections }) {
   const [open, setOpen] = useState(false);
-  const current = SECTIONS.find((s) => isActive(pathname, s.to));
+  const current = sections.find((s) => isActive(pathname, s.to));
 
   return (
     <>
@@ -135,7 +136,7 @@ function MobileSpine({ pathname }) {
           <div style={{ ...TYPE.micro, color: C.green, marginBottom: 30 }}>{issueLine()} · CONTENTS</div>
 
           <nav style={{ display: "flex", flexDirection: "column" }}>
-            {SECTIONS.map((s) => {
+            {sections.map((s) => {
               const active = isActive(pathname, s.to);
               return (
                 <Link
@@ -166,7 +167,25 @@ function MobileSpine({ pathname }) {
 export default function Spine() {
   const { pathname } = useLocation();
   const isMobile = useMediaQuery(MOBILE_Q);
-  // Close any mobile overlay implicitly by remounting on route change is handled inside.
-  useEffect(() => {}, [pathname]);
-  return isMobile ? <MobileSpine pathname={pathname} /> : <DesktopSpine pathname={pathname} />;
+  const [total, setTotal] = useState(null);
+
+  // Live library size — same source as the Collection page, so they always match.
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API}/library/liked-songs?limit=1`)
+      .then((r) => r.json())
+      .then((d) => { if (alive && typeof d.total === "number") setTotal(d.total); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const sections = total == null
+    ? SECTIONS
+    : SECTIONS.map((s) =>
+        s.to === "/collection" ? { ...s, dek: `${total.toLocaleString()} songs, browsable` } : s
+      );
+
+  return isMobile
+    ? <MobileSpine pathname={pathname} sections={sections} />
+    : <DesktopSpine pathname={pathname} sections={sections} />;
 }
