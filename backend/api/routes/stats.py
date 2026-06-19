@@ -11,6 +11,42 @@ DB_URL = os.getenv("DATABASE_URL")
 def get_conn():
     return psycopg2.connect(DB_URL)
 
+
+@router.post("/refresh-listening")
+def refresh_listening():
+    """
+    Poll Spotify's last 50 plays right now and record new ones, so the live
+    'today' stats update the moment the app opens (no hard reload needed).
+    Cheap — one Spotify call + a few inserts. The hourly cron does the same.
+    """
+    try:
+        from core.spotify_client import get_spotify_client
+        sp = get_spotify_client()
+        uid = sp.current_user()["id"]
+        items = sp.current_user_recently_played(limit=50).get("items", [])
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+    conn = get_conn(); cur = conn.cursor()
+    new = 0
+    for it in items:
+        t = it.get("track") or {}
+        if not t.get("id"):
+            continue
+        try:
+            cur.execute(
+                """INSERT INTO listening_history (user_id, track_id, track_name, artist_name, played_at)
+                   VALUES (%s,%s,%s,%s,%s) ON CONFLICT (played_at) DO NOTHING""",
+                (uid, t["id"], t["name"], t["artists"][0]["name"], it["played_at"]),
+            )
+            if cur.rowcount > 0:
+                new += 1
+        except Exception:
+            pass
+    conn.commit(); cur.close(); conn.close()
+    return {"success": True, "new_plays": new}
+
+
 @router.get("/wrapped")
 def get_wrapped(
     period: Literal["day", "week", "month", "year"] = "month",

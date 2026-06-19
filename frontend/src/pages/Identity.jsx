@@ -106,11 +106,41 @@ export default function Identity() {
     fetch(`${API}/stats/sonic-identity`).then((r) => r.json()).then(setSonic);
     fetch(`${API}/stats/all-time`).then((r) => r.json()).then(setAllTime);
     fetch(`${API}/playlists/languages`).then((r) => r.json()).then((d) => setLanguages(d.languages || []));
+    // Kick a live poll on open so "today" reflects very recent plays, then refresh.
+    fetch(`${API}/stats/refresh-listening`, { method: "POST" })
+      .then(() => new Promise((r) => setTimeout(r, 4000)))
+      .then(() => {
+        fetch(`${API}/stats/all-time`).then((r) => r.json()).then(setAllTime).catch(() => {});
+        fetch(`${API}/stats/wrapped?period=${period}`).then((r) => r.json()).then(setWrapped).catch(() => {});
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setWrapped(null);
     fetch(`${API}/stats/wrapped?period=${period}`).then((r) => r.json()).then(setWrapped);
+  }, [period]);
+
+  // Live revalidation: refetch on tab focus + every 8 min, so stats update
+  // (e.g. "today" listening time) without a hard page reload.
+  useEffect(() => {
+    let alive = true;
+    const refetch = () => {
+      fetch(`${API}/stats/wrapped?period=${period}`).then((r) => r.json()).then((d) => alive && setWrapped(d)).catch(() => {});
+      fetch(`${API}/stats/all-time`).then((r) => r.json()).then((d) => alive && setAllTime(d)).catch(() => {});
+      fetch(`${API}/stats/sonic-identity`).then((r) => r.json()).then((d) => alive && setSonic(d)).catch(() => {});
+    };
+    const onVis = () => { if (!document.hidden) refetch(); };
+    const id = setInterval(refetch, 8 * 60 * 1000);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", refetch);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", refetch);
+    };
   }, [period]);
 
   if (!sonic) {

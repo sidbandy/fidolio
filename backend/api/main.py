@@ -38,3 +38,29 @@ app.include_router(playlists.router,   prefix="/playlists",   tags=["playlists"]
 @app.get("/")
 def root():
     return {"status": "Fidolio is running"}
+
+
+# ── Hourly in-app poller ──────────────────────────────────────────────────────
+# Keeps listening history + the saved library current in the cloud, so nothing
+# needs to run on a laptop. The Procfile runs a single uvicorn worker, so there's
+# exactly one scheduler. Set ENABLE_POLLER=0 to turn it off (e.g. local dev).
+import threading
+import time as _time
+
+
+def _poll_loop():
+    _time.sleep(25)  # let the app finish booting first
+    while True:
+        try:
+            import run_poller
+            run_poller.main()  # recent plays + incremental saved-tracks sync
+        except Exception as e:
+            print(f"[scheduler] hourly poll failed: {e}")
+        _time.sleep(3600)  # every hour
+
+
+@app.on_event("startup")
+def _start_poller():
+    if os.getenv("ENABLE_POLLER", "1") != "0":
+        threading.Thread(target=_poll_loop, daemon=True, name="fidolio-poller").start()
+        print("[scheduler] in-app hourly poller started")
