@@ -690,7 +690,7 @@ function NamePrompt({ roomId, onJoin }) {
 
 
 // ─── Create Room ──────────────────────────────────────────────────────────────
-function CreateRoom({ onCreated }) {
+function CreateRoom({ onCreated, embedded = false }) {
   const [roomName,  setRoomName]  = useState("");
   const [ownerName, setOwnerName] = useState(
     localStorage.getItem("fidolio_collab_name") || ""
@@ -717,13 +717,17 @@ function CreateRoom({ onCreated }) {
   };
 
   return (
-    <div style={{ maxWidth: "560px", margin: "0 auto", padding: "40px 24px 100px" }}>
-      <h1 style={{ fontSize: "28px", fontWeight: 800, color: C.green, marginBottom: "6px" }}>
-        Collab Playlists
-      </h1>
-      <p style={{ color: C.muted, fontSize: "14px", marginBottom: "32px", margin: "0 0 32px" }}>
-        Everybody adds songs and votes. Top picks become a real Spotify playlist.
-      </p>
+    <div style={{ maxWidth: "560px", margin: "0 auto", padding: embedded ? "0 0 40px" : "40px 24px 100px" }}>
+      {!embedded && (
+        <>
+          <h1 style={{ fontSize: "28px", fontWeight: 800, color: C.green, marginBottom: "6px" }}>
+            Collab Playlists
+          </h1>
+          <p style={{ color: C.muted, fontSize: "14px", marginBottom: "32px", margin: "0 0 32px" }}>
+            Everybody adds songs and votes. Top picks become a real Spotify playlist.
+          </p>
+        </>
+      )}
 
       {/* Your rooms */}
       {myRooms.length > 0 && (
@@ -840,7 +844,7 @@ function CreateRoom({ onCreated }) {
 
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export default function CollabPage() {
+export default function CollabPage({ embedded = false }) {
   const { roomId: urlRoomId } = useParams();
   const navigate = useNavigate();
 
@@ -861,7 +865,7 @@ export default function CollabPage() {
   const handleLeave = () => {
     setRoomId(null);
     setMyName("");
-    navigate("/collab", { replace: true });
+    navigate("/playlists", { replace: true });
   };
 
   // Joined via shared URL but no name stored
@@ -883,5 +887,5 @@ export default function CollabPage() {
     return <Room roomId={roomId} myName={myName} onLeave={handleLeave} />;
   }
 
-  return <CreateRoom onCreated={handleCreated} />;
+  return <CreateRoom onCreated={handleCreated} embedded={embedded} />;
 }

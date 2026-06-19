@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, BackgroundTasks
 import psycopg2
 import os
 import calendar
@@ -159,6 +159,43 @@ def sync_current_month(user_id: str = Query(DEFAULT_USER)):
     sp  = get_spotify()
     result = create_or_sync_month(sp, user_id, now.year, now.month, force=True)
     return result
+
+
+def _run_saved_sync():
+    """Background job: incremental saved-tracks sync (insert new tracks + enrich)."""
+    try:
+        from sync_library import sync_saved_tracks
+        sync_saved_tracks(verbose=False)
+    except Exception as e:
+        print(f"[sync-saved] background sync failed: {e}")
+
+
+@router.post("/sync-saved")
+def sync_saved(background_tasks: BackgroundTasks, user_id: str = Query(DEFAULT_USER)):
+    """
+    Manually pull newly-saved Spotify tracks into the library (incremental) — the
+    same sync the cron (run_poller.py) runs every 30 min. Verifies the Spotify
+    token up front so auth problems surface in the response, then runs the sync in
+    the background so the request returns instantly (no proxy timeout on enrich).
+    """
+    try:
+        from core.spotify_client import get_spotify_client
+        get_spotify_client().current_user()
+    except Exception as e:
+        return {"success": False, "error": f"Spotify auth failed in cloud: {e}"}
+
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM tracks WHERE user_id = %s", (user_id,))
+    before = cur.fetchone()[0]
+    cur.close(); conn.close()
+
+    background_tasks.add_task(_run_saved_sync)
+    return {
+        "success": True,
+        "message": "Auth OK — saved-tracks sync running in the background. "
+                   "Reload the app in ~1 minute to see the new count.",
+        "count_before": before,
+    }
 
 
 @router.get("/monthly-rewind")

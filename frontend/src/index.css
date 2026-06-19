@@ -38,3 +38,17 @@ body {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #111; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* Spine nav — inactive links brighten on hover (active links set color inline) */
+.spine-link { color: #888; transition: color 0.15s, opacity 0.15s; }
+.spine-link:hover { color: #fff; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fadeIn 0.2s ease both; }
+
+@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise-in { animation: riseIn 0.32s cubic-bezier(0.22,1,0.36,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in, .rise-in { animation: none; }
+}

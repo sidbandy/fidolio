@@ -841,7 +841,7 @@ function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-export default function Playlists() {
+export default function Playlists({ embedded = false }) {
   const [tab,        setTab]        = useState("builder");
   const [conditions, setConditions] = useState([]);
   const [excludes,   setExcludes]   = useState([]);
@@ -1070,16 +1070,18 @@ export default function Playlists() {
   );
 
   return (
-    <div style={{ maxWidth: "1080px", margin: "0 auto", padding: "36px 24px 100px" }}>
+    <div style={embedded ? { width: "100%" } : { maxWidth: "1080px", margin: "0 auto", padding: "36px 24px 100px" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "28px", flexWrap: "wrap", gap: "12px" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800 }}>Smart Playlists</h1>
-          <p style={{ margin: "4px 0 0", color: C.muted, fontSize: "13px" }}>
-            Build rule-based playlists from your library. Auto-sync and rotate them.
-          </p>
-        </div>
+      <div style={{ display: "flex", justifyContent: embedded ? "flex-start" : "space-between",
+        alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+        {!embedded && (
+          <div>
+            <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800 }}>Smart Playlists</h1>
+            <p style={{ margin: "4px 0 0", color: C.muted, fontSize: "13px" }}>
+              Build rule-based playlists from your library. Auto-sync and rotate them.
+            </p>
+          </div>
+        )}
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={() => setTab("builder")}
             style={pill(tab === "builder")}>Builder</button>

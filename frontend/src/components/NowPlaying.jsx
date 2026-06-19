@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import useMediaQuery from "../hooks/useMediaQuery";
+import { SIDEBAR, MOBILE_Q } from "./Spine";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -59,6 +61,8 @@ export default function NowPlaying() {
     setLoadingLyrics(false);
   };
 
+  const isMobile = useMediaQuery(MOBILE_Q);
+
   if (!track) return null;
 
   const progressPct = Math.min(100, (progress / track.duration_ms) * 100);
@@ -78,7 +82,7 @@ export default function NowPlaying() {
   return (
     <>
       <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
+        position: "fixed", bottom: 0, left: isMobile ? 0 : SIDEBAR, right: 0,
         background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)",
         borderTop: "1px solid #1a1a1a", zIndex: 1000,
       }}>
