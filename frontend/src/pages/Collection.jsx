@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
-import { C, TYPE, FONT, MOOD } from "../theme";
+import { C, TYPE, FONT, MOOD, input } from "../theme";
 import { PageHeader, Card, Pill, Department, Expander, Input, Button, TrackRow, EmptyState, Reveal } from "../ui";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -16,16 +16,19 @@ const SORT_OPTIONS = [
   { value: "release_year", label: "Year" },
 ];
 
+// Multi-select decades (each = a 10-year bucket starting at `start`).
 const DECADES = [
-  { label: "All", min: null, max: null },
-  { label: "2020s", min: 2020, max: 2029 },
-  { label: "2010s", min: 2010, max: 2019 },
-  { label: "2000s", min: 2000, max: 2009 },
-  { label: "90s", min: 1990, max: 1999 },
-  { label: "80s", min: 1980, max: 1989 },
-  { label: "70s", min: 1970, max: 1979 },
-  { label: "Older", min: 1900, max: 1969 },
+  { label: "2020s", start: 2020 },
+  { label: "2010s", start: 2010 },
+  { label: "2000s", start: 2000 },
+  { label: "90s", start: 1990 },
+  { label: "80s", start: 1980 },
+  { label: "70s", start: 1970 },
+  { label: "60s", start: 1960 },
+  { label: "50s", start: 1950 },
 ];
+
+const LANGUAGES = ["", "english", "hindi", "bengali", "arabic", "spanish", "french", "portuguese", "japanese", "chinese", "punjabi", "tamil", "urdu"];
 
 export default function Collection() {
   const [mode, setMode] = useState("browse");
@@ -37,9 +40,11 @@ export default function Collection() {
   const [offset, setOffset] = useState(0);
   const [sortBy, setSortBy] = useState("saved_at");
   const [order, setOrder] = useState("desc");
-  const [decade, setDecade] = useState(DECADES[0]);
+  const [decades, setDecades] = useState([]); // [] = all decades
   const [mood, setMood] = useState("any");
+  const [language, setLanguage] = useState("");
   const [minEnergy, setMinEnergy] = useState("");
+  const [maxEnergy, setMaxEnergy] = useState("");
   const [minTempo, setMinTempo] = useState("");
   const [maxTempo, setMaxTempo] = useState("");
   const [artistInput, setArtistInput] = useState("");
@@ -51,6 +56,10 @@ export default function Collection() {
   const [deadSaves, setDeadSaves] = useState(null);
   const [topArtists, setTopArtists] = useState(null);
   const [healthTab, setHealthTab] = useState("duplicates");
+  const [deadShown, setDeadShown] = useState(60);
+
+  const toggleDecade = (start) =>
+    setDecades((prev) => (prev.includes(start) ? prev.filter((x) => x !== start) : [...prev, start]));
 
   const buildParams = (off = 0) => {
     const p = new URLSearchParams();
@@ -58,8 +67,10 @@ export default function Collection() {
     p.set("order", order);
     p.set("limit", LIMIT);
     p.set("offset", off);
-    if (decade.min) { p.set("min_year", decade.min); p.set("max_year", decade.max); }
+    if (decades.length) p.set("decades", decades.join(","));
+    if (language) p.set("language", language);
     if (minEnergy) p.set("min_energy", minEnergy);
+    if (maxEnergy) p.set("max_energy", maxEnergy);
     if (minTempo) p.set("min_tempo", minTempo);
     if (maxTempo) p.set("max_tempo", maxTempo);
     if (mood === "happy") p.set("min_valence", "0.6");
@@ -80,7 +91,8 @@ export default function Collection() {
     setLoading(false);
   };
 
-  useEffect(() => { load(0); /* eslint-disable-next-line */ }, [sortBy, order, decade, mood, minEnergy, minTempo, maxTempo, artist]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(0); }, [sortBy, order, decades.join(","), language, mood, minEnergy, maxEnergy, minTempo, maxTempo, artist]);
 
   useEffect(() => {
     fetch(`${API}/library/duplicates`).then((r) => r.json()).then(setDuplicates);
@@ -88,9 +100,13 @@ export default function Collection() {
     fetch(`${API}/library/top-saved-artists?limit=20`).then((r) => r.json()).then(setTopArtists);
   }, []);
 
+  const activeFilterCount =
+    decades.length + (language ? 1 : 0) + (mood !== "any" ? 1 : 0) +
+    (minEnergy ? 1 : 0) + (maxEnergy ? 1 : 0) + (minTempo ? 1 : 0) + (maxTempo ? 1 : 0) + (artist ? 1 : 0);
+
   const healthTabs = [
     { id: "duplicates", label: `Duplicates${duplicates ? ` (${duplicates.duplicates.length})` : ""}` },
-    { id: "dead", label: `Dead Saves${deadSaves ? ` (${deadSaves.dead_saves.length})` : ""}` },
+    { id: "dead", label: `Dead Saves${deadSaves ? ` (${(deadSaves.total ?? deadSaves.dead_saves?.length) || 0})` : ""}` },
     { id: "artists", label: "Top Artists" },
   ];
 
@@ -101,7 +117,7 @@ export default function Collection() {
           <PageHeader
             kicker="Nº 02 · Collection"
             title="The Collection"
-            lede={<>{total ? total.toLocaleString() : "11,770"} songs — sorted, filtered, and actually findable.</>}
+            lede={<>{total ? total.toLocaleString() : "…"} songs — sorted, filtered, and actually findable.</>}
             actions={
               <div style={{ display: "flex", gap: 8 }}>
                 <Pill active={mode === "browse"} onClick={() => setMode("browse")}>Browse</Pill>
@@ -129,34 +145,43 @@ export default function Collection() {
               ))}
             </div>
 
-            {/* Decade */}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18, alignItems: "center" }}>
-              <span style={{ ...TYPE.micro, marginRight: 4 }}>Release decade</span>
+            {/* Decades — multi-select */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
+              <span style={{ ...TYPE.micro, marginRight: 4 }}>Decades — pick any</span>
+              <Pill active={decades.length === 0} onClick={() => setDecades([])} style={{ minHeight: 32, padding: "5px 12px", fontSize: 11 }}>All</Pill>
               {DECADES.map((d) => (
-                <Pill key={d.label} active={decade.label === d.label} onClick={() => setDecade(d)} style={{ minHeight: 32, padding: "5px 12px", fontSize: 11 }}>
+                <Pill key={d.start} active={decades.includes(d.start)} onClick={() => toggleDecade(d.start)} style={{ minHeight: 32, padding: "5px 12px", fontSize: 11 }}>
                   {d.label}
                 </Pill>
               ))}
             </div>
 
-            {/* Advanced filters */}
+            {/* Quick mood + advanced filters */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
+              <span style={{ ...TYPE.micro, marginRight: 4 }}>Mood</span>
+              {["any", "happy", "dark"].map((m) => (
+                <Pill key={m} active={mood === m} onClick={() => setMood(m)} style={{ minHeight: 32, padding: "5px 12px", fontSize: 11, textTransform: "capitalize" }}>{m}</Pill>
+              ))}
+            </div>
+
             <div style={{ marginBottom: 20 }}>
-              <Expander label="Filters" sublabel="mood · energy · BPM · artist">
+              <Expander label="More filters" sublabel={activeFilterCount ? `${activeFilterCount} active` : "language · energy · BPM · artist"}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 16, paddingTop: 6 }}>
                   <div>
-                    <div style={{ ...TYPE.micro, marginBottom: 8 }}>Mood</div>
+                    <div style={{ ...TYPE.micro, marginBottom: 8 }}>Language</div>
+                    <select value={language} onChange={(e) => setLanguage(e.target.value)} style={input({ width: "100%", cursor: "pointer", color: language ? "#fff" : C.muted })}>
+                      {LANGUAGES.map((l) => <option key={l} value={l}>{l === "" ? "Any language" : l[0].toUpperCase() + l.slice(1)}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ ...TYPE.micro, marginBottom: 8 }}>Energy range (0–1)</div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      {["any", "happy", "dark"].map((m) => (
-                        <Pill key={m} active={mood === m} onClick={() => setMood(m)} style={{ minHeight: 34, padding: "6px 12px", textTransform: "capitalize" }}>{m}</Pill>
-                      ))}
+                      <Input type="number" step="0.1" value={minEnergy} onChange={(e) => setMinEnergy(e.target.value)} placeholder="Min" style={{ width: "50%" }} />
+                      <Input type="number" step="0.1" value={maxEnergy} onChange={(e) => setMaxEnergy(e.target.value)} placeholder="Max" style={{ width: "50%" }} />
                     </div>
                   </div>
                   <div>
-                    <div style={{ ...TYPE.micro, marginBottom: 8 }}>Min Energy</div>
-                    <Input type="number" step="0.1" min="0" max="1" value={minEnergy} onChange={(e) => setMinEnergy(e.target.value)} placeholder="0.0 – 1.0" style={{ width: "100%" }} />
-                  </div>
-                  <div>
-                    <div style={{ ...TYPE.micro, marginBottom: 8 }}>BPM Range</div>
+                    <div style={{ ...TYPE.micro, marginBottom: 8 }}>BPM range</div>
                     <div style={{ display: "flex", gap: 6 }}>
                       <Input type="number" value={minTempo} onChange={(e) => setMinTempo(e.target.value)} placeholder="Min" style={{ width: "50%" }} />
                       <Input type="number" value={maxTempo} onChange={(e) => setMaxTempo(e.target.value)} placeholder="Max" style={{ width: "50%" }} />
@@ -183,12 +208,7 @@ export default function Collection() {
             </div>
 
             {tracks.length < total && (
-              <Button
-                variant="ghost"
-                onClick={() => load(offset)}
-                disabled={loading}
-                style={{ width: "100%", marginTop: 16, padding: "14px" }}
-              >
+              <Button variant="ghost" onClick={() => load(offset)} disabled={loading} style={{ width: "100%", marginTop: 16, padding: "14px" }}>
                 {loading ? "Loading…" : `Load more (${(total - tracks.length).toLocaleString()} remaining)`}
               </Button>
             )}
@@ -228,22 +248,36 @@ export default function Collection() {
             {healthTab === "dead" && (
               !deadSaves ? <div style={TYPE.body}>Scanning…</div> : (
                 <>
-                  <p style={{ ...TYPE.body, marginBottom: 18 }}>Songs saved over a year ago that never appear in your listening history.</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {deadSaves.dead_saves.map((s, i) => (
-                      <Card key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
+                    <span style={{ ...TYPE.stat, fontSize: 40, color: C.amber }}>{(deadSaves.total ?? deadSaves.dead_saves.length).toLocaleString()}</span>
+                    <span style={{ ...TYPE.micro }}>forgotten saves</span>
+                  </div>
+                  <p style={{ ...TYPE.body, marginBottom: 18 }}>Saved over a year ago and never played since — or never played at all.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {deadSaves.dead_saves.slice(0, deadShown).map((s, i) => (
+                      <Card key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 16px" }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.name}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
                           <div style={{ fontSize: 13, color: C.sub }}>{s.artist}</div>
-                          <div style={{ ...TYPE.micro, color: C.faint, marginTop: 6, letterSpacing: "0.5px" }}>Saved {s.saved_at}</div>
                         </div>
-                        <div style={{ display: "flex", gap: 16, fontSize: 12, color: C.muted, flexShrink: 0 }}>
-                          {s.energy != null && <span>E {Math.round(s.energy * 100)}%</span>}
-                          {s.valence != null && <span>M {Math.round(s.valence * 100)}%</span>}
+                        <div style={{ display: "flex", gap: 18, fontSize: 11, flexShrink: 0, textAlign: "right" }}>
+                          <div>
+                            <div style={{ ...TYPE.micro, color: C.faint }}>Saved</div>
+                            <div style={{ color: C.sub }}>{s.saved_at || "—"}</div>
+                          </div>
+                          <div>
+                            <div style={{ ...TYPE.micro, color: C.faint }}>Last played</div>
+                            <div style={{ color: s.last_played ? C.sub : C.red }}>{s.last_played || "Never"}</div>
+                          </div>
                         </div>
                       </Card>
                     ))}
                   </div>
+                  {deadSaves.dead_saves.length > deadShown && (
+                    <Button variant="ghost" onClick={() => setDeadShown((n) => n + 100)} style={{ width: "100%", marginTop: 14, padding: "12px" }}>
+                      Show more ({(deadSaves.dead_saves.length - deadShown).toLocaleString()} more loaded)
+                    </Button>
+                  )}
                 </>
               )
             )}

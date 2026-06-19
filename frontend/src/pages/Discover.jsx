@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
 import { C, TYPE, FONT, MOOD, input } from "../theme";
 import { PageHeader, Card, Pill, Department, Expander, Input, Button, TrackRow, EmptyState, Modal, Reveal } from "../ui";
@@ -301,24 +301,33 @@ function ScoreBar({ score }) {
 function AlbumsView() {
   const [albumName, setAlbumName] = useState(""); const [artistName, setArtistName] = useState("");
   const [data, setData] = useState(null); const [loading, setLoading] = useState(false);
-  const [blindSpots, setBlindSpots] = useState(null); const [loadingBS, setLoadingBS] = useState(false);
-  const [tab, setTab] = useState("explorer");
+  const [trackSort, setTrackSort] = useState("order"); // "order" | "match"
+  const [onlyNew, setOnlyNew] = useState(false);
+  const tab = "explorer";
 
-  const exploreAlbum = async () => {
-    if (!albumName || !artistName) return;
+  const exploreAlbum = async (al = albumName, ar = artistName) => {
+    if (!al || !ar) return;
+    setAlbumName(al); setArtistName(ar);
     setLoading(true); setData(null);
-    try { const res = await fetch(`${API}/albums/explore?album_name=${encodeURIComponent(albumName)}&artist_name=${encodeURIComponent(artistName)}`); setData(await res.json()); }
+    try { const res = await fetch(`${API}/albums/explore?album_name=${encodeURIComponent(al)}&artist_name=${encodeURIComponent(ar)}`); setData(await res.json()); }
     catch { setData({ found: false, message: "Request failed — try again" }); }
     setLoading(false);
   };
-  const loadBlindSpots = async () => { setLoadingBS(true); try { const res = await fetch(`${API}/albums/blind-spots`); setBlindSpots(await res.json()); } catch {} setLoadingBS(false); };
+  const SUGGESTIONS = [
+    { al: "Swimming", ar: "Mac Miller" }, { al: "Blonde", ar: "Frank Ocean" },
+    { al: "DAMN.", ar: "Kendrick Lamar" }, { al: "Currents", ar: "Tame Impala" },
+  ];
   const fitLabel = (s) => s >= 0.7 ? { text: "Strong match for your taste", color: C.green } : s >= 0.5 ? { text: "Decent fit for your taste", color: C.amber } : { text: "Outside your usual taste", color: C.indigo };
+
+  let albumTracks = data?.tracks ? [...data.tracks] : [];
+  if (onlyNew) albumTracks = albumTracks.filter((t) => !t.already_saved);
+  if (trackSort === "match") albumTracks.sort((a, b) => (b.taste_score || 0) - (a.taste_score || 0));
 
   return (
     <Reveal>
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
-        <Pill active={tab === "explorer"} onClick={() => setTab("explorer")}>Album Explorer</Pill>
-        <Pill active={tab === "blindspots"} onClick={() => { setTab("blindspots"); if (!blindSpots) loadBlindSpots(); }}>Blind Spots</Pill>
+      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ ...TYPE.micro, marginRight: 4 }}>Try an album</span>
+        {SUGGESTIONS.map((s) => <Pill key={s.al} active={false} onClick={() => exploreAlbum(s.al, s.ar)} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>{s.al}</Pill>)}
       </div>
 
       {tab === "explorer" && (
@@ -375,9 +384,16 @@ function AlbumsView() {
               )}
 
               <Card>
-                <div style={{ ...TYPE.micro, marginBottom: 16 }}>Full track list</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                  <div style={{ ...TYPE.micro }}>Full track list</div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <Pill active={trackSort === "order"} onClick={() => setTrackSort("order")} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>Album order</Pill>
+                    <Pill active={trackSort === "match"} onClick={() => setTrackSort("match")} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>Best match</Pill>
+                    <Pill active={onlyNew} onClick={() => setOnlyNew((v) => !v)} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>New to me</Pill>
+                  </div>
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {data.tracks.map((t, i) => (
+                  {albumTracks.map((t, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 4px" }}>
                       <span style={{ color: C.faint, fontSize: 12, width: 20, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -398,23 +414,65 @@ function AlbumsView() {
         </>
       )}
 
-      {tab === "blindspots" && (
-        <div>
-          <p style={{ ...TYPE.body, marginBottom: 24 }}>Genres you've touched but never gone deep on — based on Last.fm tags from your top artists.</p>
-          {loadingBS && <div style={{ ...TYPE.body }}>Analyzing your taste…</div>}
-          {blindSpots && !loadingBS && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {blindSpots.blind_spots.map((spot, i) => (
-                <Card key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, textTransform: "capitalize", marginBottom: 4 }}>{spot.genre}</div>
-                    <div style={{ fontSize: 12, color: C.sub }}>You have it via: {spot.artists_you_have.join(", ")}</div>
+    </Reveal>
+  );
+}
+
+/* ─────────────────────────── BLIND SPOTS ─────────────────────────── */
+function BlindSpotsView() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API}/albums/blind-spots?limit=12`)
+      .then((r) => r.json())
+      .then((d) => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <Reveal>
+      <p style={{ ...TYPE.body, marginBottom: 22, maxWidth: 640 }}>
+        Niche genres you've brushed against but never explored — pulled from Last.fm tags on your top
+        artists. Here's what each one actually is, and what you already own from it.
+      </p>
+      {loading && <div style={{ ...TYPE.body }}>Analyzing your taste… (this one takes a few seconds)</div>}
+      {data?.error && <EmptyState title="Blind spots unavailable" hint={data.error} />}
+      {!loading && data?.blind_spots?.length === 0 && <EmptyState title="No blind spots found yet" hint="Save a wider range of artists and check back." />}
+      {data?.blind_spots?.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 14 }}>
+          {data.blind_spots.map((spot, i) => (
+            <Card key={i}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, textTransform: "capitalize", letterSpacing: "-0.01em" }}>{spot.genre}</div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontFamily: FONT.display, fontSize: 22, fontWeight: 700, color: C.indigo }}>{spot.songs_in_library}</div>
+                  <div style={{ ...TYPE.micro, color: C.faint }}>songs · {spot.artist_count ?? spot.artists_you_have.length} artists</div>
+                </div>
+              </div>
+              {spot.description && (
+                <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.55, marginBottom: 14 }}>{spot.description}</p>
+              )}
+              <div style={{ ...TYPE.micro, marginBottom: 6 }}>Artists you have</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: spot.songs?.length ? 14 : 0 }}>
+                {spot.artists_you_have.map((a) => (
+                  <span key={a} style={{ fontSize: 11, color: "#fff", background: "#151515", border: `1px solid ${C.border}`, padding: "3px 9px", borderRadius: 10 }}>{a}</span>
+                ))}
+              </div>
+              {spot.songs?.length > 0 && (
+                <>
+                  <div style={{ ...TYPE.micro, marginBottom: 6 }}>Your songs in this genre</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {spot.songs.slice(0, 6).map((s, j) => (
+                      <div key={j} style={{ fontSize: 12, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ color: "#fff" }}>{s.name}</span> · {s.artist}
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}><div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 700, color: C.green }}>{spot.songs_in_library}</div><div style={{ ...TYPE.micro, color: C.faint }}>songs</div></div>
-                </Card>
-              ))}
-            </div>
-          )}
+                </>
+              )}
+            </Card>
+          ))}
         </div>
       )}
     </Reveal>
@@ -436,8 +494,8 @@ export default function Discover() {
             actions={
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Pill active={mode === "search"} onClick={() => setMode("search")}>Search</Pill>
-                <Pill active={mode === "foryou"} onClick={() => setMode("foryou")}>For You</Pill>
                 <Pill active={mode === "albums"} onClick={() => setMode("albums")}>Albums</Pill>
+                <Pill active={mode === "blindspots"} onClick={() => setMode("blindspots")}>Blind Spots</Pill>
               </div>
             }
           />
@@ -445,8 +503,8 @@ export default function Discover() {
       </div>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 24px 64px" }}>
         {mode === "search" && <SearchView />}
-        {mode === "foryou" && <ForYouView />}
         {mode === "albums" && <AlbumsView />}
+        {mode === "blindspots" && <BlindSpotsView />}
       </div>
     </div>
   );

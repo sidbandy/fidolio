@@ -243,9 +243,38 @@ def get_blind_spots(
             })
 
     blind_spots.sort(key=lambda x: x["songs_in_library"], reverse=True)
+    top = blind_spots[:limit]
+
+    # Enrich the surfaced blind spots: what the genre means + your songs in it.
+    import re
+    conn = get_conn(); cur = conn.cursor()
+    for bs in top:
+        # Plain-language meaning via Last.fm tag.getInfo
+        try:
+            r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
+                "method": "tag.getInfo", "tag": bs["genre"],
+                "api_key": LASTFM_KEY, "format": "json",
+            }, timeout=5)
+            summary = r.json().get("tag", {}).get("wiki", {}).get("summary", "") or ""
+            summary = re.sub(r"<.*?>", "", summary).split("Read more")[0].strip()
+            bs["description"] = summary or None
+        except Exception:
+            bs["description"] = None
+        # Example songs you own in this genre (by the artists tagged with it)
+        try:
+            cur.execute("""
+                SELECT name, artist FROM tracks
+                WHERE user_id = %s AND artist = ANY(%s)
+                ORDER BY saved_at DESC LIMIT 12
+            """, (user_id, bs["artists_you_have"]))
+            bs["songs"] = [{"name": n, "artist": a} for n, a in cur.fetchall()]
+        except Exception:
+            bs["songs"] = []
+        bs["artist_count"] = len(bs["artists_you_have"])
+    cur.close(); conn.close()
 
     return {
-        "blind_spots":  blind_spots[:limit],
+        "blind_spots":  top,
         "total_found":  len(blind_spots),
         "message":      "Genres you've touched but never gone deep on"
     }

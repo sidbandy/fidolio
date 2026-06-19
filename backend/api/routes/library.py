@@ -425,30 +425,59 @@ def find_duplicates(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 @router.get("/dead-saves")
 def find_dead_saves(
     user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
-    min_days: int = Query(365)
+    min_days: int = Query(365),
+    limit: int = Query(2000, le=5000),
 ):
+    """
+    Songs saved over `min_days` ago that you've either never played or haven't
+    played since then. Returns the true total + each track's saved date and
+    last-played date (null = never played in tracked history).
+    """
     conn = get_conn()
     cur  = conn.cursor()
+
+    # True total (HAVING needs a subquery to count)
     cur.execute("""
-        SELECT t.id, t.name, t.artist, t.saved_at, t.energy, t.valence
+        SELECT COUNT(*) FROM (
+            SELECT t.id
+            FROM tracks t
+            LEFT JOIN listening_history lh ON lh.track_id = t.id
+            WHERE t.user_id = %s AND t.saved_at < NOW() - INTERVAL '1 day' * %s
+            GROUP BY t.id
+            HAVING MAX(lh.played_at) IS NULL
+                OR MAX(lh.played_at) < NOW() - INTERVAL '1 day' * %s
+        ) sub
+    """, (user_id, min_days, min_days))
+    total = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT t.id, t.name, t.artist, t.saved_at, t.energy, t.valence,
+               MAX(lh.played_at) AS last_played
         FROM tracks t
         LEFT JOIN listening_history lh ON lh.track_id = t.id
-        WHERE t.user_id = %s
-          AND lh.id IS NULL
-          AND t.saved_at < NOW() - INTERVAL '1 day' * %s
+        WHERE t.user_id = %s AND t.saved_at < NOW() - INTERVAL '1 day' * %s
+        GROUP BY t.id, t.name, t.artist, t.saved_at, t.energy, t.valence
+        HAVING MAX(lh.played_at) IS NULL
+            OR MAX(lh.played_at) < NOW() - INTERVAL '1 day' * %s
         ORDER BY t.saved_at ASC
-        LIMIT 50
-    """, (user_id, min_days))
+        LIMIT %s
+    """, (user_id, min_days, min_days, limit))
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return {"dead_saves": [
-        {
-            "id": r[0], "name": r[1], "artist": r[2],
-            "saved_at": str(r[3])[:10], "energy": r[4], "valence": r[5]
-        }
-        for r in rows
-    ]}
+    return {
+        "total": total,
+        "returned": len(rows),
+        "dead_saves": [
+            {
+                "id": r[0], "name": r[1], "artist": r[2],
+                "saved_at": str(r[3])[:10] if r[3] else None,
+                "energy": r[4], "valence": r[5],
+                "last_played": str(r[6])[:10] if r[6] else None,
+            }
+            for r in rows
+        ],
+    }
 
 @router.get("/top-saved-artists")
 def top_saved_artists(
@@ -489,6 +518,8 @@ def liked_songs(
     min_valence: float  = Query(None),
     max_valence: float  = Query(None),
     artist: str         = Query(None),
+    language: str       = Query(None),
+    decades: str        = Query(None),
     limit: int          = Query(50, le=200),
     offset: int         = Query(0)
 ):
@@ -519,6 +550,21 @@ def liked_songs(
     if artist:
         filters.append("LOWER(artist) LIKE %s")
         params.append(f"%{artist.lower()}%")
+    if language:
+        filters.append("LOWER(language) = %s")
+        params.append(language.lower())
+    if decades:
+        # Comma-separated decade starts, e.g. "2020,1990" → disjoint year ranges.
+        try:
+            starts = [int(d) for d in decades.split(",") if d.strip()]
+        except ValueError:
+            starts = []
+        ors = []
+        for s in starts:
+            ors.append("(release_year BETWEEN %s AND %s)")
+            params.extend([s, s + 9])
+        if ors:
+            filters.append("(" + " OR ".join(ors) + ")")
 
     valid_sorts = {"saved_at","tempo","energy","valence","danceability","artist","album","name"}
     sort_col  = sort_by if sort_by in valid_sorts else "saved_at"
