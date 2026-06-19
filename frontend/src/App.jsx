@@ -1,8 +1,8 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { C } from "./theme";
 import useMediaQuery from "./hooks/useMediaQuery";
 import Spine, { SIDEBAR, MOBILE_Q } from "./components/Spine";
-import NowPlaying from "./components/NowPlaying";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // The five magazine sections
@@ -16,15 +16,24 @@ import CollabPage from "./pages/Collab"; // shared collab-room deep links
 function Shell() {
   const isMobile = useMediaQuery(MOBILE_Q);
   const { pathname } = useLocation();
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("fidolio_spine_collapsed") === "1");
+  const toggle = () =>
+    setCollapsed((c) => {
+      const n = !c;
+      localStorage.setItem("fidolio_spine_collapsed", n ? "1" : "0");
+      return n;
+    });
+  const marginLeft = isMobile ? 0 : collapsed ? 0 : SIDEBAR;
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: "#fff" }}>
-      <Spine />
+      <Spine collapsed={collapsed} onToggle={toggle} />
       <main
         style={{
-          marginLeft: isMobile ? 0 : SIDEBAR,
+          marginLeft,
           paddingTop: isMobile ? 52 : 0,
-          paddingBottom: 96,
+          paddingBottom: isMobile ? 92 : 40,
           minHeight: "100vh",
+          transition: "margin-left 0.3s ease",
         }}
       >
         <ErrorBoundary key={pathname}>
@@ -52,7 +61,6 @@ function Shell() {
         </Routes>
         </ErrorBoundary>
       </main>
-      <NowPlaying />
     </div>
   );
 }

@@ -107,6 +107,10 @@ export const input = (extra = {}) => ({
   ...extra,
 });
 
+// ── Layout constants (shared by Spine, NowPlaying, App shell) ──
+export const SIDEBAR = 248;            // expanded sidebar width (desktop)
+export const MOBILE_Q = "(max-width: 860px)";
+
 // Shared Recharts theming.
 export const chartTooltip = {
   background: "#141414", border: `1px solid ${C.border}`, borderRadius: "10px",

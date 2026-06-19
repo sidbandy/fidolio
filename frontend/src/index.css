@@ -49,6 +49,14 @@ body {
 @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .rise-in { animation: riseIn 0.32s cubic-bezier(0.22,1,0.36,1) both; }
 
+/* Now Playing: slow blurred album-art drift ("motion graphic") */
+@keyframes kenburns {
+  0%   { transform: scale(1.05) translate(0, 0); }
+  50%  { transform: scale(1.18) translate(-2%, -2%); }
+  100% { transform: scale(1.05) translate(0, 0); }
+}
+.kenburns { animation: kenburns 24s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .fade-in, .rise-in { animation: none; }
+  .fade-in, .rise-in, .kenburns { animation: none; }
 }

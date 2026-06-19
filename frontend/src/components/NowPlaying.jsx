@@ -1,221 +1,179 @@
 import { useState, useEffect, useRef } from "react";
-import useMediaQuery from "../hooks/useMediaQuery";
-import { SIDEBAR, MOBILE_Q } from "./Spine";
+import { C, FONT, moodColor, SIDEBAR } from "../theme";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-export default function NowPlaying() {
-  const [track, setTrack]           = useState(null);
-  const [progress, setProgress]     = useState(0);
-  const [lyrics, setLyrics]         = useState(null);
+const fmt = (ms) => {
+  const s = Math.floor((ms || 0) / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+const moodWord = (v) => (v < 0.3 ? "dark" : v < 0.6 ? "neutral" : "happy");
+
+// variant: "panel" (embedded at the bottom of the spine) | "bar" (mobile bottom bar)
+export default function NowPlaying({ variant = "bar" }) {
+  const [track, setTrack] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [lyrics, setLyrics] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [loadingLyrics, setLoadingLyrics] = useState(false);
   const lastFetchTime = useRef(null);
-  const trackRef      = useRef(null);
+  const trackRef = useRef(null);
 
-  // Poll Spotify every 30s for real position
   useEffect(() => {
     const poll = async () => {
       try {
-        const res  = await fetch(`${API}/nowplaying/current`);
+        const res = await fetch(`${API}/nowplaying/current`);
         const data = await res.json();
         if (data.playing) {
-          setTrack(data);
-          trackRef.current  = data;
-          setProgress(data.progress_ms);
-          lastFetchTime.current = Date.now();
-        } else {
-          setTrack(null);
-          trackRef.current = null;
-        }
+          setTrack(data); trackRef.current = data;
+          setProgress(data.progress_ms); lastFetchTime.current = Date.now();
+        } else { setTrack(null); trackRef.current = null; }
       } catch {}
     };
     poll();
-    const interval = setInterval(poll, 30000);
-    return () => clearInterval(interval);
+    const id = setInterval(poll, 30000);
+    return () => clearInterval(id);
   }, []);
 
-  // Advance progress bar every second locally
   useEffect(() => {
     const tick = setInterval(() => {
       if (!trackRef.current || !lastFetchTime.current) return;
-      const elapsed = Date.now() - lastFetchTime.current;
-      const newProgress = trackRef.current.progress_ms + elapsed;
-      if (newProgress <= trackRef.current.duration_ms) {
-        setProgress(newProgress);
-      }
+      const next = trackRef.current.progress_ms + (Date.now() - lastFetchTime.current);
+      if (next <= trackRef.current.duration_ms) setProgress(next);
     }, 1000);
     return () => clearInterval(tick);
   }, []);
 
   const fetchLyrics = async () => {
     if (!track) return;
-    setLoadingLyrics(true);
-    setLyricsOpen(true);
+    setLoadingLyrics(true); setLyricsOpen(true);
     try {
-      const res  = await fetch(
-        `${API}/nowplaying/lyrics-meaning?track_name=${encodeURIComponent(track.name)}&artist=${encodeURIComponent(track.artist)}`
-      );
+      const res = await fetch(`${API}/nowplaying/lyrics-meaning?track_name=${encodeURIComponent(track.name)}&artist=${encodeURIComponent(track.artist)}`);
       setLyrics(await res.json());
     } catch {}
     setLoadingLyrics(false);
   };
 
-  const isMobile = useMediaQuery(MOBILE_Q);
-
   if (!track) return null;
 
   const progressPct = Math.min(100, (progress / track.duration_ms) * 100);
+  const f = track.features;
 
-  const moodColor = (v) => {
-    if (!v) return "#555";
-    if (v < 0.3) return "#6366f1";
-    if (v < 0.6) return "#f59e0b";
-    return "#1db954";
-  };
+  // ── Genius "what's this about" popover (shared) ──
+  const popover = lyricsOpen && (
+    <div
+      className="fade-in"
+      style={{
+        position: "fixed", zIndex: 1300,
+        ...(variant === "panel"
+          ? { left: SIDEBAR + 14, bottom: 16, width: 340 }
+          : { left: 12, right: 12, bottom: 86, maxWidth: 420, marginInline: "auto" }),
+        background: "#121212", borderRadius: 16, border: `1px solid ${C.border}`,
+        padding: 22, boxShadow: "0 16px 50px rgba(0,0,0,0.7)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>{loadingLyrics ? "Looking up…" : lyrics?.title || "Song info"}</div>
+        <button onClick={() => { setLyricsOpen(false); setLyrics(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+      </div>
+      {loadingLyrics && <div style={{ color: C.label, fontSize: 13 }}>Fetching from Genius…</div>}
+      {!loadingLyrics && lyrics?.found && (
+        <>
+          {lyrics.description
+            ? <p style={{ fontSize: 13, color: "#aaa", lineHeight: 1.65, marginBottom: 14 }}>{lyrics.description}{lyrics.description.length >= 598 && "…"}</p>
+            : <p style={{ fontSize: 13, color: C.label }}>No description available yet.</p>}
+          <div style={{ display: "flex", gap: 12, fontSize: 11, color: C.label, borderTop: `1px solid ${C.border}`, paddingTop: 12, flexWrap: "wrap" }}>
+            {lyrics.release_date && <span>Released {lyrics.release_date}</span>}
+            {lyrics.annotation_count > 0 && <span>{lyrics.annotation_count} annotations</span>}
+            {lyrics.pageviews && <span>{(lyrics.pageviews / 1000).toFixed(0)}k views</span>}
+          </div>
+          {lyrics.genius_url && (
+            <a href={lyrics.genius_url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 12, fontSize: 12, color: C.green, textDecoration: "none" }}>Read full annotations on Genius ↗</a>
+          )}
+        </>
+      )}
+      {!loadingLyrics && !lyrics?.found && <p style={{ fontSize: 13, color: C.label }}>{lyrics?.message || "Not found on Genius."}</p>}
+    </div>
+  );
 
-  const fmt = (ms) => {
-    const s = Math.floor(ms / 1000);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  };
+  // ── PANEL: rich card embedded at the bottom of the spine sidebar ──
+  if (variant === "panel") {
+    return (
+      <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0 }}>
+        {/* Animated, blurred album-art backdrop (the "motion graphic") */}
+        {track.album_art && (
+          <div
+            className="kenburns"
+            style={{
+              position: "absolute", inset: "-30%", backgroundImage: `url(${track.album_art})`,
+              backgroundSize: "cover", backgroundPosition: "center",
+              filter: "blur(28px) brightness(0.5) saturate(1.25)", opacity: 0.6, zIndex: 0,
+            }}
+          />
+        )}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(8,8,8,0.97), rgba(8,8,8,0.5))", zIndex: 0 }} />
 
+        <div style={{ position: "relative", zIndex: 1, padding: 14 }}>
+          {/* Album art with progress + title/artist overlay */}
+          <div style={{ position: "relative", borderRadius: 11, overflow: "hidden", boxShadow: "0 10px 28px rgba(0,0,0,0.55)" }}>
+            {track.album_art
+              ? <img src={track.album_art} alt="" style={{ width: "100%", display: "block", aspectRatio: "1 / 1", objectFit: "cover" }} />
+              : <div style={{ width: "100%", aspectRatio: "1 / 1", background: C.card2 }} />}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.35)" }}>
+              <div style={{ height: 3, background: C.green, width: `${progressPct}%`, transition: "width 1s linear" }} />
+            </div>
+            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "30px 12px 11px", background: "linear-gradient(transparent, rgba(0,0,0,0.92))" }}>
+              {track.in_library && (
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: "rgba(13,43,24,0.85)", padding: "2px 6px", borderRadius: 4, marginBottom: 5, display: "inline-block" }}>IN LIBRARY</span>
+              )}
+              <div style={{ fontFamily: FONT.display, fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.name}</div>
+              <div style={{ fontSize: 12, color: "#cdcdcd", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.artist}</div>
+            </div>
+          </div>
+
+          {/* Album + custom stats below the art */}
+          <div style={{ fontSize: 11, color: C.sub, marginTop: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.album}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", marginTop: 6, fontSize: 10.5, color: C.muted }}>
+            <span>{fmt(progress)} / {fmt(track.duration_ms)}</span>
+            {f && <>
+              <span>{Math.round(f.tempo)} BPM</span>
+              <span style={{ color: moodColor(f.valence) }}>{moodWord(f.valence)}</span>
+              <span>{Math.round(f.energy * 100)}% energy</span>
+            </>}
+          </div>
+
+          <div style={{ display: "flex", gap: 6, marginTop: 11 }}>
+            <button onClick={fetchLyrics} style={{ flex: 1, padding: "8px 8px", borderRadius: 9, border: "none", background: lyricsOpen ? C.green : "rgba(255,255,255,0.09)", color: lyricsOpen ? "#000" : "#e6e6e6", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>What's this about?</button>
+            <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ padding: "8px 13px", borderRadius: 9, background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center" }}>↗</a>
+          </div>
+        </div>
+        {popover}
+      </div>
+    );
+  }
+
+  // ── BAR: compact bottom bar (mobile) ──
   return (
     <>
-      <div style={{
-        position: "fixed", bottom: 0, left: isMobile ? 0 : SIDEBAR, right: 0,
-        background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)",
-        borderTop: "1px solid #1a1a1a", zIndex: 1000,
-      }}>
-        {/* Progress bar — sits at very top of the bar */}
-        <div style={{ height: "2px", background: "#111" }}>
-          <div style={{
-            height: "2px", background: "#1db954",
-            width: `${progressPct}%`, transition: "width 1s linear"
-          }} />
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)", borderTop: `1px solid ${C.border}`, zIndex: 1000 }}>
+        <div style={{ height: 2, background: "#111" }}>
+          <div style={{ height: 2, background: C.green, width: `${progressPct}%`, transition: "width 1s linear" }} />
         </div>
-
-        <div style={{
-          display: "flex", alignItems: "center", gap: "16px",
-          padding: "10px 32px"
-        }}>
-          {track.album_art && (
-            <img src={track.album_art} alt="album" style={{
-              width: "42px", height: "42px", borderRadius: "6px", flexShrink: 0
-            }} />
-          )}
-
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px" }}>
+          {track.album_art && <img src={track.album_art} alt="" style={{ width: 40, height: 40, borderRadius: 6, flexShrink: 0 }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontWeight: 700, fontSize: "14px",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                maxWidth: "220px" }}>
-                {track.name}
-              </span>
-              <span style={{ color: "#555", fontSize: "13px", whiteSpace: "nowrap" }}>
-                — {track.artist}
-              </span>
-              {track.in_library && (
-                <span style={{ fontSize: "10px", color: "#1db954",
-                  background: "#0d2b18", padding: "2px 6px",
-                  borderRadius: "4px", flexShrink: 0 }}>
-                  IN LIBRARY
-                </span>
-              )}
+            <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {track.name} <span style={{ color: C.muted, fontWeight: 400 }}>— {track.artist}</span>
             </div>
-            <div style={{ fontSize: "11px", color: "#333", marginTop: "3px" }}>
+            <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {fmt(progress)} / {fmt(track.duration_ms)} · {track.album}
             </div>
           </div>
-
-          {track.features && (
-            <div style={{ display: "flex", gap: "16px",
-              fontSize: "11px", color: "#444", flexShrink: 0 }}>
-              <span>{Math.round(track.features.tempo)} BPM</span>
-              <span style={{ color: moodColor(track.features.valence) }}>
-                {track.features.valence < 0.3 ? "dark"
-                  : track.features.valence < 0.6 ? "neutral" : "happy"}
-              </span>
-              <span>{Math.round(track.features.energy * 100)}% energy</span>
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-            <button onClick={fetchLyrics} style={{
-              padding: "6px 14px", borderRadius: "8px", border: "none",
-              background: lyricsOpen ? "#1db954" : "#1a1a1a",
-              color: lyricsOpen ? "#000" : "#888",
-              fontSize: "12px", fontWeight: 600, cursor: "pointer"
-            }}>
-              What's this about?
-            </button>
-            <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{
-              padding: "6px 14px", borderRadius: "8px",
-              background: "#1a1a1a", color: "#888",
-              fontSize: "12px", fontWeight: 600, textDecoration: "none"
-            }}>
-              Open ↗
-            </a>
-          </div>
+          <button onClick={fetchLyrics} aria-label="What's this about?" style={{ padding: "7px 10px", borderRadius: 8, border: "none", background: lyricsOpen ? C.green : "#1a1a1a", color: lyricsOpen ? "#000" : C.sub, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>ⓘ</button>
+          <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ padding: "7px 11px", borderRadius: 8, background: "#1a1a1a", color: C.sub, fontSize: 12, fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>↗</a>
         </div>
       </div>
-
-      {lyricsOpen && (
-        <div style={{
-          position: "fixed", bottom: "72px", right: "32px",
-          width: "360px", background: "#111", borderRadius: "16px",
-          border: "1px solid #1a1a1a", padding: "24px", zIndex: 999,
-          boxShadow: "0 -8px 40px rgba(0,0,0,0.7)"
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between",
-            alignItems: "center", marginBottom: "16px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700 }}>
-              {loadingLyrics ? "Looking up..." : lyrics?.title || "Song info"}
-            </div>
-            <button onClick={() => { setLyricsOpen(false); setLyrics(null); }} style={{
-              background: "none", border: "none",
-              color: "#555", cursor: "pointer", fontSize: "20px"
-            }}>×</button>
-          </div>
-
-          {loadingLyrics && (
-            <div style={{ color: "#444", fontSize: "13px" }}>Fetching from Genius...</div>
-          )}
-
-          {!loadingLyrics && lyrics?.found && (
-            <>
-              {lyrics.description
-                ? <p style={{ fontSize: "13px", color: "#aaa",
-                    lineHeight: 1.65, marginBottom: "16px" }}>
-                    {lyrics.description}{lyrics.description.length >= 598 && "..."}
-                  </p>
-                : <p style={{ fontSize: "13px", color: "#444" }}>
-                    No description available yet.
-                  </p>
-              }
-              <div style={{ display: "flex", gap: "12px", fontSize: "11px",
-                color: "#444", borderTop: "1px solid #1a1a1a", paddingTop: "12px",
-                flexWrap: "wrap" }}>
-                {lyrics.release_date && <span>Released {lyrics.release_date}</span>}
-                {lyrics.annotation_count > 0 && <span>{lyrics.annotation_count} annotations</span>}
-                {lyrics.pageviews && <span>{(lyrics.pageviews/1000).toFixed(0)}k views</span>}
-              </div>
-              {lyrics.genius_url && (
-                <a href={lyrics.genius_url} target="_blank" rel="noreferrer"
-                  style={{ display: "block", marginTop: "12px",
-                    fontSize: "12px", color: "#1db954", textDecoration: "none" }}>
-                  Read full annotations on Genius ↗
-                </a>
-              )}
-            </>
-          )}
-
-          {!loadingLyrics && !lyrics?.found && (
-            <p style={{ fontSize: "13px", color: "#444" }}>
-              {lyrics?.message || "Not found on Genius."}
-            </p>
-          )}
-        </div>
-      )}
+      {popover}
     </>
   );
 }
