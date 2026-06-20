@@ -5,7 +5,7 @@ import os
 import time
 from datetime import timedelta
 from dotenv import load_dotenv
-from api.routes.library import fetch_album_cover
+from api.routes.library import fetch_album_cover, MOODS
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 router = APIRouter()
@@ -177,6 +177,23 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
         "artist": r[0], "songs_saved": r[1],
         "first_save": str(r[2])[:10], "last_save": str(r[3])[:10]
     } for r in cur.fetchall()]
+
+    # Signature mood — the single most common niche mood across the library.
+    sel = ", ".join(f"COUNT(*) FILTER (WHERE {sql})" for _k, _l, sql in MOODS)
+    cur.execute(f"SELECT {sel} FROM tracks WHERE user_id = %s", (user_id,))
+    counts = cur.fetchone() or []
+    signature_mood = None
+    if counts:
+        top = max(zip(MOODS, counts), key=lambda x: x[1] or 0)
+        signature_mood = top[0][1] if (top[1] or 0) > 0 else None   # label
+
+    # Era — the release year you've saved the most from (peak of your taste).
+    cur.execute("""SELECT release_year, COUNT(*) c FROM tracks
+                   WHERE user_id = %s AND release_year IS NOT NULL
+                   GROUP BY release_year ORDER BY c DESC LIMIT 1""", (user_id,))
+    yr = cur.fetchone()
+    peak_year = int(yr[0]) if yr and yr[0] else None
+
     cur.close()
     conn.close()
     return {
@@ -193,6 +210,8 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
         "mood_distribution": {"dark": mood[0], "neutral": mood[1], "happy": mood[2]},
         "energy_distribution": {"calm": energy_dist[0], "medium": energy_dist[1], "intense": energy_dist[2]},
         "dominant_key": top_key,
+        "signature_mood": signature_mood,
+        "peak_year": peak_year,
         "rabbit_holes": rabbit_holes
     }
 

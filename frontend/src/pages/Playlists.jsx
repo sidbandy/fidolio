@@ -972,8 +972,8 @@ export default function Playlists({ embedded = false }) {
       if (d.sync_error) alert(`Rule saved, but Spotify sync failed: ${d.sync_error}`);
       setShowSave(false);
       setEditTarget(null);
-      loadSaved();
-      setTab("saved");
+      setTab("builder");
+      alert("Playlist saved and synced to Spotify ✓");
     } finally {
       setSaving(false);
     }
@@ -1078,14 +1078,6 @@ export default function Playlists({ embedded = false }) {
             </p>
           </div>
         )}
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={() => setTab("builder")}
-            style={pill(tab === "builder")}>Builder</button>
-          <button onClick={() => { setTab("saved"); loadSaved(); }}
-            style={pill(tab === "saved")}>
-            My Playlists {saved.length > 0 ? `(${saved.length})` : ""}
-          </button>
-        </div>
       </div>
 
       {/* ── BUILDER TAB ────────────────────────────────────────────────────── */}

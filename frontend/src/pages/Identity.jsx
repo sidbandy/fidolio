@@ -302,7 +302,8 @@ export default function Identity() {
     );
   }
 
-  const { averages, mood_distribution, energy_distribution, dominant_key } = sonic;
+  const { averages, mood_distribution, energy_distribution, signature_mood, peak_year } = sonic;
+  const groove = Math.round(((averages.energy + averages.danceability) / 2) * 100);
 
   const radarData = [
     { feature: "Energy", value: Math.round(averages.energy * 100) },
@@ -340,17 +341,16 @@ export default function Identity() {
               <>
                 Your library's fingerprint, built from{" "}
                 <span style={{ color: "#fff" }}>{averages.total_analyzed.toLocaleString()}</span> analyzed songs.
-                Average tempo <span style={{ color: "#fff" }}>{Math.round(averages.tempo)} BPM</span>, dominant key{" "}
-                <span style={{ color: accent }}>{dominant_key}</span>.
+                Average tempo <span style={{ color: "#fff" }}>{Math.round(averages.tempo)} BPM</span>
+                {signature_mood && <>, and it leans <span style={{ color: accent }}>{signature_mood.toLowerCase()}</span></>}.
               </>
             }
           />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 20 }}>
             <StatBlock value={Math.round(averages.tempo)} label="Avg BPM" format={(n) => Math.round(n)} />
-            <StatBlock value={Math.round(averages.energy * 100)} label="Energy" format={pct} />
-            <StatBlock value={Math.round(averages.danceability * 100)} label="Danceability" format={pct} />
-            <StatBlock value={Math.round(averages.acousticness * 100)} label="Acoustic" format={pct} />
-            <StatBlock value={dominant_key} label="Dominant Key" accent={accent} />
+            <StatBlock value={groove} label="Groove" format={pct} />
+            <StatBlock value={signature_mood || "—"} label="Signature Mood" accent={accent} />
+            <StatBlock value={peak_year || "—"} label="Peak Year" />
           </div>
         </div>
       </div>
