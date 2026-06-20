@@ -668,15 +668,161 @@ function WeatherIcon({ size = 22, color = "currentColor" }) {
   );
 }
 
+function AlbumRecCard({ a }) {
+  const initial = ((a.album || "?").trim()[0] || "?").toUpperCase();
+  const href = a.already_saved ? null : `https://open.spotify.com/search/${encodeURIComponent(a.artist + " " + a.album)}`;
+  const inner = (
+    <div style={{ background: C.card, border: `1px solid ${a.already_saved ? C.greenBd : C.border}`, borderRadius: 12, padding: 12 }}>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "1 / 1", borderRadius: 8, overflow: "hidden", background: C.card2, marginBottom: 10 }}>
+        {a.cover
+          ? <img src={a.cover} alt={a.album} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.display, fontSize: 34, fontWeight: 700, color: C.faint }}>{initial}</div>}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.album}</div>
+      <div style={{ fontSize: 11, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artist}</div>
+      <div style={{ fontSize: 10.5, color: a.already_saved ? C.green : C.muted, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {a.already_saved ? `★ ${a.owned} in library` : (a.why || "new to you")}{!a.already_saved && " ↗"}
+      </div>
+    </div>
+  );
+  return href ? <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>{inner}</a> : inner;
+}
+
+// Unified discovery studio: seed 1-2 songs/albums (and/or a vibe) → similar SONGS
+// and ALBUMS, owned + new-to-you. Powered by /discovery/recommend.
+function RecommendStudio() {
+  const { playing, play } = usePreview();
+  const [seeds, setSeeds] = useState([]);
+  const [seedType, setSeedType] = useState("song");
+  const [query, setQuery] = useState("");
+  const [sugs, setSugs] = useState([]);
+  const [vibe, setVibe] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!query.trim()) { setSugs([]); return; }
+    const id = setTimeout(() => {
+      const url = seedType === "song"
+        ? `${API}/search/?q=${encodeURIComponent(query)}&limit=6`
+        : `${API}/library/search-albums?q=${encodeURIComponent(query)}&limit=6`;
+      fetch(url).then((r) => r.json()).then((d) => {
+        setSugs(seedType === "song"
+          ? (d.results || d.tracks || []).map((t) => ({ name: t.name, artist: t.artist }))
+          : (d.albums || []).map((a) => ({ name: a.album, artist: a.artist })));
+      }).catch(() => setSugs([]));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [query, seedType]);
+
+  const addSeed = (s) => {
+    if (seeds.length >= 2) return;
+    setSeeds((prev) => [...prev, { type: seedType, name: s.name, artist: s.artist }]);
+    setQuery(""); setSugs([]);
+  };
+
+  useEffect(() => {
+    if (!seeds.length && !vibe) { setResult(null); return; }
+    setLoading(true);
+    const p = new URLSearchParams();
+    seeds.forEach((s) => p.append("seed", `${s.type}|${s.name}|${s.artist || ""}`));
+    if (vibe) p.set("vibe", vibe);
+    p.set("size", "10");
+    fetch(`${API}/discovery/recommend?${p}`).then((r) => r.json())
+      .then((d) => { setResult(d); setLoading(false); }).catch(() => setLoading(false));
+  }, [seeds, vibe]);
+
+  const songRows = (list, owned) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 16 }}>
+      {list.map((t, i) => (
+        <TrackRow key={(owned ? t.id : t.spotify_id) || `${owned ? "o" : "u"}${i}`}
+          track={owned ? t : { id: t.spotify_id || `u${i}`, name: t.name, artist: t.artist, spotify_url: t.spotify_url }}
+          playing={playing} onPlay={play}
+          note={owned ? (t.match != null ? `${Math.round(t.match * 100)}% match` : null) : "NEW"} />
+      ))}
+    </div>
+  );
+
+  return (
+    <div>
+      <Card style={{ marginBottom: 20, overflow: "visible" }}>
+        <div style={{ ...TYPE.micro, marginBottom: 12 }}>Recommend from — add up to 2 songs or albums</div>
+        {seeds.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            {seeds.map((s, i) => (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 20, padding: "6px 12px", fontSize: 12, color: "#fff" }}>
+                <span style={{ ...TYPE.micro, color: C.green }}>{s.type}</span>
+                {s.name}{s.artist ? <span style={{ color: C.sub }}>· {s.artist}</span> : null}
+                <button onClick={() => setSeeds((prev) => prev.filter((_, x) => x !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        {seeds.length < 2 && (
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "inline-flex", gap: 4, padding: 3, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 9 }}>
+                <button onClick={() => setSeedType("song")} style={subTab(seedType === "song")}>Song</button>
+                <button onClick={() => setSeedType("album")} style={subTab(seedType === "album")}>Album</button>
+              </div>
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search a ${seedType} in your library…`} style={{ flex: 1, minWidth: 180 }} />
+            </div>
+            {sugs.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 6, background: "#121212", border: `1px solid ${C.border}`, borderRadius: 10, zIndex: 50, overflow: "hidden", boxShadow: "0 12px 36px rgba(0,0,0,0.6)" }}>
+                {sugs.map((s, i) => (
+                  <button key={i} onClick={() => addSeed(s)} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", background: "none", border: "none", borderTop: i ? `1px solid ${C.border}` : "none", color: "#fff", cursor: "pointer", fontSize: 13 }}>
+                    {s.name} <span style={{ color: C.sub }}>· {s.artist}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+          {FORYOU_VIBES.map((v) => (
+            <Pill key={v.value} active={vibe === v.value} onClick={() => setVibe(vibe === v.value ? "" : v.value)} style={{ minHeight: 34, padding: "6px 12px" }}>{v.emoji} {v.label}</Pill>
+          ))}
+        </div>
+      </Card>
+
+      {loading && <div style={{ ...TYPE.body }}>Finding matches…</div>}
+      {!loading && !result && <EmptyState title="Add a seed or pick a vibe" hint="Drop in a song or album you love (or tap a vibe) — you'll get similar songs and albums, from your library and new to you." />}
+      {!loading && result && (
+        <>
+          <Department no="—" title="Songs" />
+          {result.songs?.owned?.length > 0 && (<>
+            <div style={{ ...TYPE.micro, color: C.green, margin: "6px 0 8px" }}>From your library</div>
+            {songRows(result.songs.owned, true)}
+          </>)}
+          {result.songs?.unowned?.length > 0 && (<>
+            <div style={{ ...TYPE.micro, color: C.muted, margin: "6px 0 8px" }}>New to you</div>
+            {songRows(result.songs.unowned, false)}
+          </>)}
+
+          {(result.albums?.owned?.length > 0 || result.albums?.unowned?.length > 0) && (
+            <div style={{ marginTop: 24 }}>
+              <Department no="—" title="Albums" right={<span style={{ ...TYPE.micro, color: C.muted }}>★ yours · the rest new</span>} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 16 }}>
+                {(result.albums.owned || []).map((a, i) => <AlbumRecCard key={`o${i}`} a={{ ...a, already_saved: true }} />)}
+                {(result.albums.unowned || []).map((a, i) => <AlbumRecCard key={`u${i}`} a={{ ...a, already_saved: false }} />)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function FindView() {
-  const [sub, setSub] = useState("library");
+  const [sub, setSub] = useState("recommend");
   return (
     <div>
       <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 24 }}>
-        <button onClick={() => setSub("library")} style={subTab(sub === "library")}>Library search</button>
-        <button onClick={() => setSub("album")} style={subTab(sub === "album")}>Album explorer</button>
+        <button onClick={() => setSub("recommend")} style={subTab(sub === "recommend")}>Recommend</button>
+        <button onClick={() => setSub("album")} style={subTab(sub === "album")}>Album X-ray</button>
       </div>
-      {sub === "library" ? <SearchView /> : <AlbumsView />}
+      {sub === "recommend" ? <RecommendStudio /> : <AlbumsView />}
     </div>
   );
 }

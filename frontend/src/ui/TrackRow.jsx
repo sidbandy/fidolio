@@ -21,7 +21,9 @@ export function Badge({ children, color = C.muted }) {
 
 // The most-repeated element in the app. Editorial ranked variant.
 // Keeps the usePreview contract: onPlay(track.id, track.name, track.artist).
-export default function TrackRow({ track, playing, onPlay, rank }) {
+// `note` is an optional accent badge (e.g. "92% match", "NEW") for contexts like
+// the discovery studio — shown ahead of the metadata badges.
+export default function TrackRow({ track, playing, onPlay, rank, note }) {
   const isPlaying = playing === track.id;
   const mc = moodColor(track.valence);
   const { analyser } = usePreviewContext();
@@ -134,6 +136,7 @@ export default function TrackRow({ track, playing, onPlay, rank }) {
           alignItems: "center",
         }}
       >
+        {note && <Badge color={C.green}>{note}</Badge>}
         {track.release_year && <Badge>{track.release_year}</Badge>}
         {track.energy != null && <Badge>E {Math.round(track.energy * 100)}%</Badge>}
         {track.moods?.length

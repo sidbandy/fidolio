@@ -140,6 +140,18 @@ def album_cover(album: str, artist: str = ""):
     return {"album": album, **fetch_album_cover(album, artist)}
 
 
+@router.get("/search-albums")
+def search_albums(q: str, user_id: str = Query(DEFAULT_USER), limit: int = Query(6, le=15)):
+    """Owned-album typeahead for the discovery studio's album seeds."""
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""SELECT album, artist, COUNT(*) FROM tracks
+                   WHERE user_id=%s AND album ILIKE %s AND album != ''
+                   GROUP BY album, artist ORDER BY COUNT(*) DESC LIMIT %s""",
+                (user_id, f"%{q}%", limit))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return {"albums": [{"album": r[0], "artist": r[1], "owned": r[2]} for r in rows]}
+
+
 # ── One-time enrichment backfill ──────────────────────────────────────────────
 # ~2,042 older tracks were inserted without ReccoBeats audio features, so they're
 # invisible to moods + feature-based recs. This fills them via the same _enrich
