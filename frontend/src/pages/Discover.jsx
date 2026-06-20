@@ -699,6 +699,7 @@ function RecommendStudio() {
   const [vibe, setVibe] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [mixes, setMixes] = useState(null);
 
   useEffect(() => {
     if (!query.trim()) { setSugs([]); return; }
@@ -731,6 +732,14 @@ function RecommendStudio() {
     fetch(`${API}/discovery/recommend?${p}`).then((r) => r.json())
       .then((d) => { setResult(d); setLoading(false); }).catch(() => setLoading(false));
   }, [seeds, vibe]);
+
+  // A single song seed also gets harmonic "mixes well with" picks (key + BPM).
+  useEffect(() => {
+    const songSeed = seeds.length === 1 && seeds[0].type === "song" ? seeds[0] : null;
+    if (!songSeed) { setMixes(null); return; }
+    fetch(`${API}/discovery/mixes-with?track=${encodeURIComponent(songSeed.name)}&size=5`)
+      .then((r) => r.json()).then((d) => setMixes(d.tracks || [])).catch(() => setMixes(null));
+  }, [seeds]);
 
   const songRows = (list, owned) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 16 }}>
@@ -805,6 +814,17 @@ function RecommendStudio() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 16 }}>
                 {(result.albums.owned || []).map((a, i) => <AlbumRecCard key={`o${i}`} a={{ ...a, already_saved: true }} />)}
                 {(result.albums.unowned || []).map((a, i) => <AlbumRecCard key={`u${i}`} a={{ ...a, already_saved: false }} />)}
+              </div>
+            </div>
+          )}
+
+          {mixes && mixes.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <Department no="—" title="Mixes well with" right={<span style={{ ...TYPE.micro, color: C.muted }}>harmonic key · close BPM</span>} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {mixes.map((t) => (
+                  <TrackRow key={t.id} track={t} playing={playing} onPlay={play} note={t.relation} />
+                ))}
               </div>
             </div>
           )}

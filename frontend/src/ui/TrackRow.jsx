@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { C, FONT, moodColor, moodKey } from "../theme";
 import OrbitingWaveform from "../components/OrbitingWaveform";
 import { usePreviewContext } from "../context/PreviewProvider";
@@ -15,6 +16,36 @@ export function Badge({ children, color = C.muted }) {
       }}
     >
       {children}
+    </span>
+  );
+}
+
+// Clickable mood chip → a popover explaining WHY this track earned the mood,
+// from its real feature values. No filler — the numbers are the insight.
+function MoodBadge({ mood, track, color }) {
+  const [open, setOpen] = useState(false);
+  const pct = (x) => (x != null ? `${Math.round(x * 100)}%` : "—");
+  return (
+    <span style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        style={{ fontSize: 11, color, background: "#151515", padding: "3px 8px", borderRadius: 10, whiteSpace: "nowrap", border: "none", cursor: "pointer", fontFamily: FONT.body }}
+      >
+        ● {mood}
+      </button>
+      {open && (
+        <>
+          <div onClick={(e) => { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 1199 }} />
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 1200, width: 210, background: "#141414", border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px", boxShadow: "0 12px 36px rgba(0,0,0,0.6)", textAlign: "left" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color, marginBottom: 7 }}>{mood} — why</div>
+            <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.7 }}>
+              Mood <b style={{ color: "#fff" }}>{pct(track.valence)}</b> · Energy <b style={{ color: "#fff" }}>{pct(track.energy)}</b><br />
+              {track.tempo ? <>Tempo <b style={{ color: "#fff" }}>{Math.round(track.tempo)} BPM</b> · </> : null}
+              Acoustic <b style={{ color: "#fff" }}>{pct(track.acousticness)}</b> · Dance <b style={{ color: "#fff" }}>{pct(track.danceability)}</b>
+            </div>
+          </div>
+        </>
+      )}
     </span>
   );
 }
@@ -140,7 +171,7 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         {track.release_year && <Badge>{track.release_year}</Badge>}
         {track.energy != null && <Badge>E {Math.round(track.energy * 100)}%</Badge>}
         {track.moods?.length
-          ? track.moods.slice(0, 2).map((m) => <Badge key={m} color={mc}>● {m}</Badge>)
+          ? track.moods.slice(0, 2).map((m) => <MoodBadge key={m} mood={m} track={track} color={mc} />)
           : track.valence != null && <Badge color={mc}>● {moodKey(track.valence)}</Badge>}
         {track.language && track.language !== "english" && (
           <Badge>{track.language}</Badge>

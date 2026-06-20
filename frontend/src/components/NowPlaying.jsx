@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { C, FONT, moodColor, SIDEBAR } from "../theme";
+import OrbitingWaveform from "./OrbitingWaveform";
+import { usePreviewContext } from "../context/PreviewProvider";
+
+const KICKER = { fontFamily: FONT.body, fontSize: 10, fontWeight: 700, letterSpacing: "1.6px", textTransform: "uppercase" };
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -18,6 +22,7 @@ export default function NowPlaying({ variant = "bar" }) {
   const [loadingLyrics, setLoadingLyrics] = useState(false);
   const lastFetchTime = useRef(null);
   const trackRef = useRef(null);
+  const { playing: previewId, current: preview, analyser, stop: stopPreview } = usePreviewContext();
 
   useEffect(() => {
     const poll = async () => {
@@ -53,6 +58,45 @@ export default function NowPlaying({ variant = "bar" }) {
     } catch {}
     setLoadingLyrics(false);
   };
+
+  // A 30s preview (triggered anywhere in the app) takes over the dock with the
+  // live, audio-reactive waveform — this is the "where does the big waveform live"
+  // answer: same spot as the Spotify now-playing.
+  if (previewId && preview) {
+    const pv = preview.features?.valence;
+    const wave = (size) => (
+      <OrbitingWaveform size={size} active analyser={analyser}
+        valence={pv} features={preview.features} seed={preview.id || preview.name} />
+    );
+    if (variant === "panel") {
+      return (
+        <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 38%, rgba(29,185,84,0.12), rgba(8,8,8,0.98))", zIndex: 0 }} />
+          <div style={{ position: "relative", zIndex: 1, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+            <div style={{ ...KICKER, color: C.green, alignSelf: "flex-start" }}>Preview</div>
+            <div style={{ padding: "4px 0" }}>{wave(156)}</div>
+            <div style={{ textAlign: "center", width: "100%" }}>
+              <div style={{ fontFamily: FONT.display, fontSize: 16, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.name}</div>
+              <div style={{ fontSize: 12, color: "#cdcdcd", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.artist}</div>
+            </div>
+            <button onClick={stopPreview} style={{ width: "100%", padding: 9, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>■ Stop preview</button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)", borderTop: `1px solid ${C.border}`, zIndex: 1000 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 14px" }}>
+          <div style={{ width: 42, height: 42, flexShrink: 0 }}>{wave(42)}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.name} <span style={{ color: C.muted, fontWeight: 400 }}>— {preview.artist}</span></div>
+            <div style={{ fontSize: 10.5, color: C.green, marginTop: 2 }}>Preview</div>
+          </div>
+          <button onClick={stopPreview} aria-label="Stop preview" style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: "#1a1a1a", color: C.sub, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>■</button>
+        </div>
+      </div>
+    );
+  }
 
   if (!track) return null;
 
@@ -122,6 +166,9 @@ export default function NowPlaying({ variant = "bar" }) {
               : <div style={{ width: "100%", aspectRatio: "1 / 1", background: C.card2 }} />}
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.35)" }}>
               <div style={{ height: 3, background: C.green, width: `${progressPct}%`, transition: "width 1s linear" }} />
+            </div>
+            <div title="Sonic signature" style={{ position: "absolute", top: 9, right: 9, width: 46, height: 46, borderRadius: "50%", background: "rgba(0,0,0,0.42)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <OrbitingWaveform size={42} active={false} features={f} valence={f?.valence} seed={track.name} />
             </div>
             <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "30px 12px 11px", background: "linear-gradient(transparent, rgba(0,0,0,0.92))" }}>
               {track.in_library && (
