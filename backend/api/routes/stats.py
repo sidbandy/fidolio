@@ -194,6 +194,9 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
     yr = cur.fetchone()
     peak_year = int(yr[0]) if yr and yr[0] else None
 
+    cur.execute("SELECT COUNT(DISTINCT artist) FROM tracks WHERE user_id = %s", (user_id,))
+    artist_count = cur.fetchone()[0]
+
     cur.close()
     conn.close()
     return {
@@ -212,6 +215,7 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
         "dominant_key": top_key,
         "signature_mood": signature_mood,
         "peak_year": peak_year,
+        "artist_count": artist_count,
         "rabbit_holes": rabbit_holes
     }
 

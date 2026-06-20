@@ -302,7 +302,7 @@ export default function Identity() {
     );
   }
 
-  const { averages, mood_distribution, energy_distribution, signature_mood, peak_year } = sonic;
+  const { averages, mood_distribution, energy_distribution, signature_mood, peak_year, artist_count } = sonic;
   const groove = Math.round(((averages.energy + averages.danceability) / 2) * 100);
 
   const radarData = [
@@ -350,7 +350,8 @@ export default function Identity() {
             <StatBlock value={Math.round(averages.tempo)} label="Avg BPM" format={(n) => Math.round(n)} />
             <StatBlock value={groove} label="Groove" format={pct} />
             <StatBlock value={signature_mood || "—"} label="Signature Mood" accent={accent} />
-            <StatBlock value={peak_year || "—"} label="Peak Year" />
+            <StatBlock value={peak_year ? String(peak_year) : "—"} label="Peak Year" />
+            <StatBlock value={artist_count || 0} label="Artists" format={(n) => Math.round(n).toLocaleString()} />
           </div>
         </div>
       </div>
