@@ -26,43 +26,58 @@ def get_conn():
 # ── Niche mood matrix ─────────────────────────────────────────────────────────
 # Composite of audio features (valence/energy/tempo/acousticness/danceability).
 # A track can match several moods; each is applied strictly when the metrics fit.
+# 13 niche moods. Predicates are conjunctions of comparisons on the audio features
+# so the Python mirror (compute_moods) matches the SQL EXACTLY — the badge shown on
+# a track is always what the ?moods= filter would include (verified by parity test).
+# Optional features (acousticness/danceability/instrumentalness) only appear in >=
+# / lower-bound checks, so a missing value (coerced to 0) correctly fails the
+# predicate, matching SQL's NULL-excludes-the-row behaviour.
 MOODS = [
     ("euphoric",   "Euphoric",   "valence>=0.7 AND energy>=0.7 AND danceability>=0.6"),
-    ("hype",       "Hype",       "energy>=0.8 AND tempo>=125 AND danceability>=0.6"),
-    ("anthemic",   "Anthemic",   "valence>=0.6 AND energy>=0.7 AND tempo BETWEEN 100 AND 145"),
-    ("wistful",    "Wistful",    "valence BETWEEN 0.45 AND 0.78 AND energy<=0.45 AND tempo<=108"),
-    ("serene",     "Serene",     "valence>=0.5 AND energy<=0.4 AND acousticness>=0.4"),
-    ("dreamy",     "Dreamy",     "acousticness>=0.5 AND energy<=0.45 AND valence BETWEEN 0.4 AND 0.72"),
+    ("hype",       "Hype",       "energy>=0.8 AND tempo>=125 AND danceability>=0.55"),
+    ("anthemic",   "Anthemic",   "valence>=0.6 AND energy>=0.72 AND tempo BETWEEN 100 AND 150"),
+    ("frenetic",   "Frenetic",   "energy>=0.85 AND tempo>=140"),
+    ("aggressive", "Aggressive", "valence<=0.42 AND energy>=0.8 AND tempo>=120"),
+    ("playful",    "Playful",    "valence>=0.65 AND danceability>=0.65 AND energy BETWEEN 0.5 AND 0.8"),
     ("sensual",    "Sensual",    "valence BETWEEN 0.4 AND 0.72 AND danceability>=0.6 AND energy BETWEEN 0.35 AND 0.7 AND tempo<=118"),
-    ("melancholy", "Melancholy", "valence<=0.35 AND energy<=0.45"),
     ("brooding",   "Brooding",   "valence<=0.42 AND energy BETWEEN 0.45 AND 0.72"),
-    ("aggressive", "Aggressive", "valence<=0.45 AND energy>=0.75 AND tempo>=120"),
+    ("hypnotic",   "Hypnotic",   "instrumentalness>=0.5 AND energy BETWEEN 0.3 AND 0.78"),
+    ("wistful",    "Wistful",    "valence BETWEEN 0.45 AND 0.78 AND energy<=0.45 AND tempo<=110"),
+    ("serene",     "Serene",     "valence>=0.5 AND energy<=0.4 AND acousticness>=0.4"),
+    ("dreamy",     "Dreamy",     "acousticness>=0.5 AND energy<=0.45 AND valence BETWEEN 0.35 AND 0.72"),
+    ("melancholy", "Melancholy", "valence<=0.4 AND energy<=0.45"),
 ]
 
 
-def compute_moods(valence, energy, tempo, acousticness, danceability):
-    """Python mirror of the MOODS SQL predicates — tags a track in the response."""
+def compute_moods(valence, energy, tempo, acousticness, danceability, instrumentalness=None):
+    """Python mirror of the MOODS SQL predicates — tags a track in the response.
+    Pass instrumentalness so the 'hypnotic' badge matches the ?moods= filter."""
     def _f(x):
         try:
             return float(x)
         except (TypeError, ValueError):
             return None
-    v, e, t, a, d = _f(valence), _f(energy), _f(tempo), _f(acousticness), _f(danceability)
+    v, e, t, a, d, i = (_f(valence), _f(energy), _f(tempo),
+                        _f(acousticness), _f(danceability), _f(instrumentalness))
     if v is None or e is None:
         return []
     a = a or 0.0
     d = d or 0.0
+    i = i or 0.0
     out = []
     if v >= 0.7 and e >= 0.7 and d >= 0.6: out.append("euphoric")
-    if e >= 0.8 and t is not None and t >= 125 and d >= 0.6: out.append("hype")
-    if v >= 0.6 and e >= 0.7 and t is not None and 100 <= t <= 145: out.append("anthemic")
-    if 0.45 <= v <= 0.78 and e <= 0.45 and t is not None and t <= 108: out.append("wistful")
-    if v >= 0.5 and e <= 0.4 and a >= 0.4: out.append("serene")
-    if a >= 0.5 and e <= 0.45 and 0.4 <= v <= 0.72: out.append("dreamy")
+    if e >= 0.8 and t is not None and t >= 125 and d >= 0.55: out.append("hype")
+    if v >= 0.6 and e >= 0.72 and t is not None and 100 <= t <= 150: out.append("anthemic")
+    if e >= 0.85 and t is not None and t >= 140: out.append("frenetic")
+    if v <= 0.42 and e >= 0.8 and t is not None and t >= 120: out.append("aggressive")
+    if v >= 0.65 and d >= 0.65 and 0.5 <= e <= 0.8: out.append("playful")
     if 0.4 <= v <= 0.72 and d >= 0.6 and 0.35 <= e <= 0.7 and t is not None and t <= 118: out.append("sensual")
-    if v <= 0.35 and e <= 0.45: out.append("melancholy")
     if v <= 0.42 and 0.45 <= e <= 0.72: out.append("brooding")
-    if v <= 0.45 and e >= 0.75 and t is not None and t >= 120: out.append("aggressive")
+    if i >= 0.5 and 0.3 <= e <= 0.78: out.append("hypnotic")
+    if 0.45 <= v <= 0.78 and e <= 0.45 and t is not None and t <= 110: out.append("wistful")
+    if v >= 0.5 and e <= 0.4 and a >= 0.4: out.append("serene")
+    if a >= 0.5 and e <= 0.45 and 0.35 <= v <= 0.72: out.append("dreamy")
+    if v <= 0.4 and e <= 0.45: out.append("melancholy")
     return out
 
 
@@ -123,6 +138,49 @@ def fetch_album_cover(album: str, artist: str = ""):
 @router.get("/album-cover")
 def album_cover(album: str, artist: str = ""):
     return {"album": album, **fetch_album_cover(album, artist)}
+
+
+# ── One-time enrichment backfill ──────────────────────────────────────────────
+# ~2,042 older tracks were inserted without ReccoBeats audio features, so they're
+# invisible to moods + feature-based recs. This fills them via the same _enrich
+# the sync uses. Bounded per call (re-call until unenriched_total stops dropping).
+def _run_enrich_backfill(user_id, ids):
+    from sync_library import _enrich
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        _enrich(cur, conn, ids)
+        print(f"[backfill] processed {len(ids)} tracks for {user_id}")
+    except Exception as e:
+        print(f"[backfill] error: {e}")
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/enrich-status")
+def enrich_status(user_id: str = Query(DEFAULT_USER)):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE reccobeats_id IS NOT NULL)
+                   FROM tracks WHERE user_id = %s""", (user_id,))
+    total, enriched = cur.fetchone()
+    cur.close(); conn.close()
+    return {"total": total, "enriched": enriched, "unenriched": total - enriched}
+
+
+@router.post("/enrich-backfill")
+def enrich_backfill(background_tasks: BackgroundTasks,
+                    user_id: str = Query(DEFAULT_USER),
+                    limit: int = Query(600, le=3000)):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""SELECT id FROM tracks WHERE user_id = %s AND reccobeats_id IS NULL
+                   ORDER BY saved_at DESC LIMIT %s""", (user_id, limit))
+    ids = [r[0] for r in cur.fetchall()]
+    cur.execute("SELECT COUNT(*) FROM tracks WHERE user_id = %s AND reccobeats_id IS NULL", (user_id,))
+    remaining = cur.fetchone()[0]
+    cur.close(); conn.close()
+    if ids:
+        background_tasks.add_task(_run_enrich_backfill, user_id, ids)
+    return {"queued": len(ids), "unenriched_total": remaining,
+            "note": "runs in background; re-call until unenriched_total stops dropping"}
 
 
 def get_spotify():
@@ -701,7 +759,8 @@ def liked_songs(
     params.extend([limit, offset])
     cur.execute(f"""
         SELECT id, name, artist, album, saved_at,
-               tempo, energy, valence, danceability, acousticness, release_year
+               tempo, energy, valence, danceability, acousticness, release_year,
+               instrumentalness
         FROM tracks
         WHERE {where}
         ORDER BY {sort_col} {direction} NULLS LAST
@@ -725,7 +784,7 @@ def liked_songs(
                 "danceability": round(float(r[8]), 2)  if r[8] else None,
                 "acousticness": round(float(r[9]), 2)  if r[9] else None,
                 "release_year": r[10],
-                "moods":        compute_moods(r[7], r[6], r[5], r[9], r[8]),
+                "moods":        compute_moods(r[7], r[6], r[5], r[9], r[8], r[11]),
                 "spotify_url":  f"https://open.spotify.com/track/{r[0]}"
             }
             for r in rows
