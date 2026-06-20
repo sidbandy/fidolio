@@ -253,7 +253,20 @@ def get_blind_spots(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
             })
     cur.close(); conn.close()
 
-    blind_spots.sort(key=lambda x: x["songs_in_library"], reverse=True)
+    # Spread across the saved-count range so cards aren't all big niches — mix
+    # small ~5-song footholds with the ~40-song ones (quantile-interleaved).
+    bs_sorted = sorted(blind_spots, key=lambda x: x["songs_in_library"])
+    n = len(bs_sorted) or 1
+    B = 5
+    buckets = [[] for _ in range(B)]
+    for i, x in enumerate(bs_sorted):
+        buckets[min(B - 1, i * B // n)].append(x)
+    blind_spots = []
+    for j in range(max((len(b) for b in buckets), default=0)):
+        for b in buckets:
+            if j < len(b):
+                blind_spots.append(b[j])
+
     _BS_CACHE[user_id] = (time.time(), blind_spots)
     return {"blind_spots": blind_spots, "total_found": len(blind_spots)}
 

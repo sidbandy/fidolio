@@ -23,7 +23,11 @@ const lvl = (v) => (v >= 0.66 ? "high" : v >= 0.4 ? "moderate" : "low");
 
 // ── Plain-language readings of the user's own data (for the ⓘ buttons) ──
 function audioReading(a) {
-  return `Built from your ${a.total_analyzed.toLocaleString()} analyzed songs. Your library is ${lvl(a.energy)} energy and ${lvl(a.danceability)} on danceability, with ${lvl(a.acousticness)} acousticness — ${a.acousticness < 0.4 ? "you favour produced, electronic-leaning music" : "you lean acoustic and organic"}. It's ${Math.round((1 - a.instrumentalness) * 100)}% vocal-forward, around ${Math.round(a.tempo)} BPM on average.`;
+  const vocal = Math.round((1 - (a.instrumentalness ?? 0)) * 100);
+  const moodLean = a.valence < 0.4 ? "darker and more introspective" : a.valence < 0.6 ? "emotionally balanced — neither bright nor bleak" : "bright and upbeat";
+  const drive = a.energy >= 0.6 ? "you reach for music that drives and moves" : a.energy >= 0.45 ? "you like a steady, mid-energy pocket" : "you gravitate to calmer, slower-burning songs";
+  const texture = a.acousticness < 0.35 ? "your sound is mostly produced and electronic-leaning" : a.acousticness < 0.6 ? "you mix produced and organic textures" : "you lean acoustic and organic";
+  return `What this says about your taste: your library skews ${moodLean}, and ${drive}. ${texture[0].toUpperCase()}${texture.slice(1)}, and it's ${vocal}% vocal-forward — ${vocal >= 72 ? "voices and lyrics lead the songs you save" : "instrumentation and texture matter as much as the vocal"}. The radar is the shape of all that, averaged over ${a.total_analyzed.toLocaleString()} analyzed tracks.`;
 }
 function moodReading(m) {
   const t = (m.dark + m.neutral + m.happy) || 1;
@@ -358,7 +362,7 @@ export default function Identity() {
           <Department no="—" title="Fingerprint" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 20, marginBottom: 40 }}>
             <Card>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ ...TYPE.micro }}>Audio Profile</div>
                 <InfoTip title="Audio Profile">{audioReading(averages)}</InfoTip>
               </div>
@@ -376,7 +380,7 @@ export default function Identity() {
               </div>
             </Card>
             <Card>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                 <div style={{ ...TYPE.micro }}>Distributions</div>
                 <InfoTip title="Mood & Energy">{moodReading(mood_distribution)} {energyReading(energy_distribution)}</InfoTip>
               </div>
@@ -398,7 +402,7 @@ export default function Identity() {
               />
             </Card>
             <Card>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                 <div style={{ ...TYPE.micro }}>Languages</div>
                 <InfoTip title="Languages">{langReading(languages)}</InfoTip>
               </div>

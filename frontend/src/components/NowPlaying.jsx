@@ -64,8 +64,8 @@ export default function NowPlaying({ variant = "bar" }) {
   // answer: same spot as the Spotify now-playing.
   if (previewId && preview) {
     const pv = preview.features?.valence;
-    const wave = (w, h) => (
-      <Waveform width={w} height={h} active analyser={analyser}
+    const wave = (d) => (
+      <Waveform size={d} active analyser={analyser}
         valence={pv} features={preview.features} seed={preview.id || preview.name} />
     );
     if (variant === "panel") {
@@ -74,7 +74,7 @@ export default function NowPlaying({ variant = "bar" }) {
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 40%, rgba(29,185,84,0.13), rgba(8,8,8,0.98))", zIndex: 0 }} />
           <div style={{ position: "relative", zIndex: 1, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
             <div style={{ ...KICKER, color: C.green, alignSelf: "flex-start" }}>Preview</div>
-            <div style={{ width: "100%", padding: "10px 0" }}>{wave(216, 96)}</div>
+            <div style={{ display: "flex", justifyContent: "center", padding: "6px 0" }}>{wave(184)}</div>
             <div style={{ textAlign: "center", width: "100%" }}>
               <div style={{ fontFamily: FONT.display, fontSize: 17, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.name}</div>
               <div style={{ fontSize: 12, color: "#cdcdcd", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.artist}</div>
@@ -87,7 +87,7 @@ export default function NowPlaying({ variant = "bar" }) {
     return (
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)", borderTop: `1px solid ${C.border}`, zIndex: 1000 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 14px" }}>
-          <div style={{ width: 96, height: 38, flexShrink: 0 }}>{wave(96, 38)}</div>
+          <div style={{ width: 42, height: 42, flexShrink: 0 }}>{wave(42)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.name} <span style={{ color: C.muted, fontWeight: 400 }}>— {preview.artist}</span></div>
             <div style={{ fontSize: 10.5, color: C.green, marginTop: 2 }}>Preview</div>
@@ -187,9 +187,9 @@ export default function NowPlaying({ variant = "bar" }) {
             </>}
           </div>
 
-          <div style={{ marginTop: 14 }}>
-            <div style={{ ...KICKER, color: C.muted, fontSize: 9, marginBottom: 7 }}>Sonic signature</div>
-            <Waveform width={216} height={42} active={false} features={f} valence={f?.valence} seed={track.name} />
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ ...KICKER, color: C.muted, fontSize: 9, marginBottom: 8, alignSelf: "flex-start" }}>Sonic signature</div>
+            <Waveform size={104} active={false} features={f} valence={f?.valence} seed={track.name} />
           </div>
 
           <div style={{ display: "flex", gap: 6, marginTop: 14 }}>

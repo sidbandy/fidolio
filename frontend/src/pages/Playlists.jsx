@@ -932,13 +932,6 @@ export default function Playlists({ embedded = false }) {
     }
   }, [conditions, excludes, sortBy, sortOrder, limit]);
 
-  // ── Apply preset ─────────────────────────────────────────────────────────
-  const applyPreset = useCallback((preset) => {
-    setConditions(preset.conditions);
-    setExcludes([]);
-    runPreview(preset.conditions, []);
-  }, [runPreview]);
-
   // ── Add condition ────────────────────────────────────────────────────────
   const addCondition = (toExcludes = false) => {
     const f = FIELDS[0];
@@ -1103,35 +1096,6 @@ export default function Playlists({ embedded = false }) {
           {/* Left: rule builder */}
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
-            {/* Quick presets */}
-            <div style={{ ...card() }}>
-              <div style={{ fontSize: "11px", color: C.label, fontWeight: 600,
-                textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "10px" }}>
-                Quick Presets
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {PRESETS.map(p => (
-                  <button key={p.label} onClick={() => applyPreset(p)}
-                    style={{ padding: "5px 11px", borderRadius: "16px",
-                      fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                      background: "#151515", color: C.muted,
-                      border: `1px solid ${C.border}`, transition: "all 0.15s" }}
-                    onMouseEnter={e => {
-                      e.target.style.background = C.greenBg;
-                      e.target.style.color = C.green;
-                      e.target.style.borderColor = C.greenBd;
-                    }}
-                    onMouseLeave={e => {
-                      e.target.style.background = "#151515";
-                      e.target.style.color = C.muted;
-                      e.target.style.borderColor = C.border;
-                    }}>
-                    {p.emoji} {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Conditions */}
             <div style={{ ...card() }}>
               <div style={{ display: "flex", justifyContent: "space-between",
@@ -1246,7 +1210,7 @@ export default function Playlists({ embedded = false }) {
                   Set conditions and hit <strong style={{ color: "#fff" }}>Preview</strong>
                 </div>
                 <div style={{ fontSize: "12px", marginTop: "6px" }}>
-                  Or tap a quick preset above
+                  Filter by mood, energy, BPM, language, decade, and more.
                 </div>
               </div>
             )}
