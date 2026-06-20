@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
+import SwipeDeck from "../components/SwipeDeck";
 import { C, TYPE, FONT, MOOD, input } from "../theme";
 import { PageHeader, Card, Pill, Department, Expander, Input, Button, TrackRow, EmptyState, Reveal } from "../ui";
 
@@ -57,6 +58,18 @@ export default function Collection() {
   const [deadSaves, setDeadSaves] = useState(null);
   const [healthTab, setHealthTab] = useState("duplicates");
   const [deadShown, setDeadShown] = useState(60);
+  const [swipe, setSwipe] = useState(false);
+
+  const unsave = async (ids) => {
+    if (!ids?.length) return;
+    try {
+      await fetch(`${API}/library/unsave`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
+    } catch { /* ignore */ }
+  };
+  const reloadHealth = () => {
+    fetch(`${API}/library/duplicates`).then((r) => r.json()).then(setDuplicates).catch(() => {});
+    fetch(`${API}/library/dead-saves`).then((r) => r.json()).then(setDeadSaves).catch(() => {});
+  };
 
   const toggleDecade = (start) =>
     setDecades((prev) => (prev.includes(start) ? prev.filter((x) => x !== start) : [...prev, start]));
@@ -109,6 +122,16 @@ export default function Collection() {
     { id: "duplicates", label: `Duplicates${duplicates ? ` (${duplicates.duplicates.length})` : ""}` },
     { id: "dead", label: `Dead Saves${deadSaves ? ` (${(deadSaves.total ?? deadSaves.dead_saves?.length) || 0})` : ""}` },
   ];
+
+  const deadCards = (deadSaves?.dead_saves || []).map((s) => ({
+    key: s.id, id: s.id, title: s.name, sub: s.artist,
+    meta: `saved ${(s.saved_at || "").slice(0, 10)} · ${s.last_played ? "last played " + s.last_played.slice(0, 10) : "never played"}`,
+  }));
+  const dupCards = (duplicates?.duplicates || []).map((d) => ({
+    key: (d.track_ids && d.track_ids[0]) || d.name, id: d.track_ids && d.track_ids[0],
+    title: d.name, sub: d.artist, meta: `${d.copies} copies · removes the extras, keeps one`,
+    removeIds: (d.track_ids || []).slice(1),
+  }));
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh" }}>
@@ -225,11 +248,26 @@ export default function Collection() {
           <Reveal>
             <Department no="—" title="Library Health" right={<span style={{ ...TYPE.micro, color: C.muted }}>Fix what Spotify won't</span>} />
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22, alignItems: "center" }}>
               {healthTabs.map((t) => (
-                <Pill key={t.id} active={healthTab === t.id} onClick={() => setHealthTab(t.id)}>{t.label}</Pill>
+                <Pill key={t.id} active={healthTab === t.id} onClick={() => { setHealthTab(t.id); setSwipe(false); }}>{t.label}</Pill>
               ))}
+              <Pill active={swipe} onClick={() => { if (swipe) reloadHealth(); setSwipe((s) => !s); }}>
+                {swipe ? "← Back to list" : "🃏 Swipe to clean up"}
+              </Pill>
             </div>
+
+            {swipe ? (
+              <div style={{ padding: "8px 0 24px" }}>
+                <p style={{ ...TYPE.body, textAlign: "center", maxWidth: 420, margin: "0 auto 24px" }}>
+                  Swipe <span style={{ color: C.red }}>left to un-save</span> from Spotify, <span style={{ color: C.green }}>right to keep</span>. Tap ▶ to hear it first.
+                </p>
+                <SwipeDeck
+                  cards={healthTab === "dead" ? deadCards : dupCards}
+                  onRemove={(card) => unsave(healthTab === "dead" ? [card.id] : card.removeIds)}
+                />
+              </div>
+            ) : (<>
 
             {healthTab === "duplicates" && (
               !duplicates ? <div style={TYPE.body}>Scanning…</div> :
@@ -289,6 +327,7 @@ export default function Collection() {
                 </>
               )
             )}
+            </>)}
 
           </Reveal>
         )}

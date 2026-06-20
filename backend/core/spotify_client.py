@@ -7,6 +7,7 @@ load_dotenv()
 
 SCOPE = " ".join([
     "user-library-read",
+    "user-library-modify",          # un-save tracks (swipe-to-remove)
     "user-read-recently-played",
     "user-top-read",
     "playlist-read-private",

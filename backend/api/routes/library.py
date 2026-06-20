@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, BackgroundTasks
+from fastapi import APIRouter, Query, BackgroundTasks, Body
 import psycopg2
 import requests
 import os
@@ -193,6 +193,34 @@ def enrich_backfill(background_tasks: BackgroundTasks,
         background_tasks.add_task(_run_enrich_backfill, user_id, ids)
     return {"queued": len(ids), "unenriched_total": remaining,
             "note": "runs in background; re-call until unenriched_total stops dropping"}
+
+
+@router.post("/unsave")
+def unsave_tracks(payload: dict = Body(...), user_id: str = Query(DEFAULT_USER)):
+    """Swipe-to-remove: un-save tracks from the Spotify library + drop them locally
+    so dead-saves/duplicates stay in sync. Needs the user-library-modify scope on the
+    cached token (re-authorize once if Spotify rejects it)."""
+    ids = [i for i in (payload.get("ids") or []) if i][:300]
+    if not ids:
+        return {"success": False, "removed": 0, "error": "no track ids"}
+    try:
+        from core.spotify_client import get_spotify_client
+        sp = get_spotify_client()
+        for i in range(0, len(ids), 50):
+            sp.current_user_saved_tracks_delete(tracks=ids[i:i + 50])
+    except Exception as e:
+        return {"success": False, "removed": 0,
+                "error": f"Spotify rejected the un-save ({e}). Re-authorize with the library-modify scope."}
+    db_removed = 0
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute("DELETE FROM listening_history WHERE track_id = ANY(%s)", (ids,))
+        cur.execute("DELETE FROM tracks WHERE id = ANY(%s) AND user_id = %s", (ids, user_id))
+        db_removed = cur.rowcount
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        print(f"[unsave] local cleanup skipped: {e}")
+    return {"success": True, "removed": len(ids), "db_removed": db_removed}
 
 
 def get_spotify():
