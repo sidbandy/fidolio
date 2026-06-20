@@ -1,4 +1,6 @@
 import { C, FONT, moodColor, moodKey } from "../theme";
+import OrbitingWaveform from "../components/OrbitingWaveform";
+import { usePreviewContext } from "../context/PreviewProvider";
 
 export function Badge({ children, color = C.muted }) {
   return (
@@ -22,6 +24,7 @@ export function Badge({ children, color = C.muted }) {
 export default function TrackRow({ track, playing, onPlay, rank }) {
   const isPlaying = playing === track.id;
   const mc = moodColor(track.valence);
+  const { analyser } = usePreviewContext();
 
   return (
     <div
@@ -57,21 +60,42 @@ export default function TrackRow({ track, playing, onPlay, rank }) {
         onClick={() => onPlay(track.id, track.name, track.artist)}
         aria-label={isPlaying ? "Stop preview" : "Play preview"}
         style={{
-          width: 36,
-          height: 36,
+          position: "relative",
+          width: 46,
+          height: 46,
           borderRadius: "50%",
-          border: "none",
+          border: `1px solid ${isPlaying ? "transparent" : C.border}`,
           cursor: "pointer",
           flexShrink: 0,
-          fontSize: 11,
+          padding: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: isPlaying ? C.green : "#1a1a1a",
-          color: isPlaying ? "#000" : C.muted,
+          background: isPlaying ? "rgba(29,185,84,0.08)" : "#101010",
+          boxShadow: isPlaying ? `0 0 16px ${mc}55` : "none",
+          transform: isPlaying ? "scale(1.04)" : "none",
+          transition: "box-shadow 0.2s, transform 0.2s",
         }}
       >
-        {isPlaying ? "■" : "▶"}
+        <OrbitingWaveform
+          size={46}
+          active={isPlaying}
+          analyser={isPlaying ? analyser : null}
+          features={track}
+          valence={track.valence}
+          seed={track.id || track.name || "x"}
+        />
+        <span
+          style={{
+            position: "absolute",
+            fontSize: 10,
+            color: isPlaying ? "#fff" : C.sub,
+            textShadow: "0 1px 3px rgba(0,0,0,0.7)",
+            pointerEvents: "none",
+          }}
+        >
+          {isPlaying ? "■" : "▶"}
+        </span>
       </button>
 
       <div style={{ flex: 1, minWidth: 0 }}>

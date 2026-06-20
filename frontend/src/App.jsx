@@ -4,6 +4,7 @@ import { C } from "./theme";
 import useMediaQuery from "./hooks/useMediaQuery";
 import Spine, { SIDEBAR, MOBILE_Q } from "./components/Spine";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { PreviewProvider } from "./context/PreviewProvider";
 
 // The five magazine sections
 import Identity from "./pages/Identity";
@@ -67,8 +68,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Shell />
-    </BrowserRouter>
+    <PreviewProvider>
+      <BrowserRouter>
+        <Shell />
+      </BrowserRouter>
+    </PreviewProvider>
   );
 }
