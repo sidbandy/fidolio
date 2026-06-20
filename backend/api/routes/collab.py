@@ -107,6 +107,11 @@ def _migrate():
             "ALTER TABLE collab_rooms ADD COLUMN IF NOT EXISTS valence_min FLOAT",
             "ALTER TABLE collab_rooms ADD COLUMN IF NOT EXISTS valence_max FLOAT",
             "ALTER TABLE collab_submissions ADD COLUMN IF NOT EXISTS album_image TEXT",
+            """CREATE TABLE IF NOT EXISTS collab_reactions (
+                   submission_id INTEGER NOT NULL,
+                   reactor_name  TEXT NOT NULL,
+                   emoji         TEXT NOT NULL,
+                   PRIMARY KEY (submission_id, reactor_name))""",
         ]:
             cur.execute(sql)
         conn.commit(); cur.close(); conn.close()
@@ -186,6 +191,11 @@ class VoteRequest(BaseModel):
     submission_id: int
     voter_name:    str
     vote:          int  # -1, 0 (remove), or 1
+
+class ReactRequest(BaseModel):
+    submission_id: int
+    reactor_name:  str
+    emoji:         str  # one reaction per person per track; re-sending the same emoji clears it
 
 
 # ─── Static routes ────────────────────────────────────────────────────────────
@@ -290,6 +300,25 @@ def vote(req: VoteRequest):
     return {"success": True, "new_score": int(score)}
 
 
+@router.post("/react")
+def react(req: ReactRequest):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("SELECT emoji FROM collab_reactions WHERE submission_id = %s AND reactor_name = %s",
+                (req.submission_id, req.reactor_name))
+    row = cur.fetchone()
+    if row and row[0] == req.emoji:
+        cur.execute("DELETE FROM collab_reactions WHERE submission_id = %s AND reactor_name = %s",
+                    (req.submission_id, req.reactor_name))
+    else:
+        cur.execute("""INSERT INTO collab_reactions (submission_id, reactor_name, emoji)
+                       VALUES (%s, %s, %s)
+                       ON CONFLICT (submission_id, reactor_name)
+                       DO UPDATE SET emoji = EXCLUDED.emoji""",
+                    (req.submission_id, req.reactor_name, req.emoji))
+    conn.commit(); cur.close(); conn.close()
+    return {"success": True}
+
+
 @router.delete("/submissions/{submission_id}")
 def remove_submission(submission_id: int, caller_name: str = Query(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -374,6 +403,27 @@ def get_room(room_id: str, voter_name: str = Query("")):
         """, (voter_name, room_id.upper()))
         voter_votes = {r[0]: r[1] for r in cur.fetchall()}
 
+    # Reactions per submission (with the caller's own reaction flagged)
+    cur.execute("""
+        SELECT submission_id, emoji, COUNT(*),
+               COUNT(*) FILTER (WHERE reactor_name = %s)
+        FROM collab_reactions
+        WHERE submission_id IN (SELECT id FROM collab_submissions WHERE room_id = %s)
+        GROUP BY submission_id, emoji
+    """, (voter_name, room_id.upper()))
+    reactions = {}
+    for sid, emoji, cnt, mine in cur.fetchall():
+        reactions.setdefault(sid, []).append({"emoji": emoji, "count": int(cnt), "mine": mine > 0})
+
+    # Members = everyone who's added or voted (no separate presence table needed)
+    cur.execute("""
+        SELECT DISTINCT submitted_by FROM collab_submissions WHERE room_id = %s
+        UNION
+        SELECT DISTINCT voter_name FROM collab_votes
+          WHERE submission_id IN (SELECT id FROM collab_submissions WHERE room_id = %s)
+    """, (room_id.upper(), room_id.upper()))
+    members = sorted({r[0] for r in cur.fetchall() if r[0]}, key=str.lower)
+
     cur.close(); conn.close()
 
     return {
@@ -389,6 +439,7 @@ def get_room(room_id: str, voter_name: str = Query("")):
         "playlist_url": room[9],
         "created_at":   str(room[10])[:10],
         "total_songs":  len(rows),
+        "members":      members,
         "submissions": [{
             "id":           r[0],
             "track_id":     r[1],
@@ -402,6 +453,7 @@ def get_room(room_id: str, voter_name: str = Query("")):
             "upvotes":      int(r[9]),
             "downvotes":    int(r[10]),
             "my_vote":      voter_votes.get(r[0], 0),
+            "reactions":    reactions.get(r[0], []),
             "vibe_ok":      in_vibe(r[11], r[12], e_min, e_max, v_min, v_max),
             "spotify_url":  f"https://open.spotify.com/track/{r[1]}",
         } for r in rows],

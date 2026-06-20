@@ -45,6 +45,8 @@ const VIBES = [
   { id: "dinner_party", label: "Dinner Party 🍷", desc: "Ambient, classy" },
 ];
 
+const REACTIONS = ["🔥", "😭", "💀", "✨"];
+
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 const saveRoom = (room_id, room_name, my_name, vibe_label) => {
   const rooms = JSON.parse(localStorage.getItem("fidolio_collab_rooms") || "[]");
@@ -292,6 +294,15 @@ function Room({ roomId, myName, onLeave }) {
     load();
   };
 
+  const react = async (submissionId, emoji) => {
+    await fetch(`${API}/collab/react`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ submission_id: submissionId, reactor_name: myName, emoji }),
+    });
+    load();
+  };
+
   const finalize = async () => {
     setFinalizing(true);
     const r = await fetch(
@@ -335,7 +346,7 @@ function Room({ roomId, myName, onLeave }) {
   const hasVibe   = Boolean(room.vibe_preset);
 
   return (
-    <div style={{ padding: "36px 24px 100px", maxWidth: "860px", margin: "0 auto" }}>
+    <div style={{ padding: "8px 0 100px", maxWidth: "980px", margin: "0 auto", width: "100%" }}>
 
       {showShare && <SharePopover roomId={roomId} onClose={() => setShowShare(false)} />}
 
@@ -396,6 +407,25 @@ function Room({ roomId, myName, onLeave }) {
             <span style={{ color: C.green }}>●</span>
             Vibe guardrail: {room.vibe_desc}.
             Songs that don't fit get a ⚠ flag.
+          </div>
+        )}
+
+        {/* Members in the room */}
+        {room.members?.length > 0 && (
+          <div style={{ marginTop: "12px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: "10px", color: C.label, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>
+              In the room · {room.members.length}
+            </span>
+            {room.members.map((m) => {
+              const me = m.trim().toLowerCase() === myName.trim().toLowerCase();
+              return (
+                <span key={m} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "12px",
+                  background: me ? C.greenBg : "#151515", color: me ? C.green : C.sub,
+                  border: `1px solid ${me ? C.greenBd : C.border}` }}>
+                  {m}{me ? " (you)" : ""}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
@@ -463,17 +493,20 @@ function Room({ roomId, myName, onLeave }) {
 
             return (
               <div key={sub.id} style={{
-                display: "flex", alignItems: "center", gap: "10px",
+                display: "flex", flexDirection: "column", gap: "9px",
                 padding: "11px 14px", borderRadius: "11px",
                 background: isMyVote1 ? C.greenBg : isMyVoteN ? C.redBg : C.card,
                 border: `1px solid ${isMyVote1 ? C.greenBd : isMyVoteN ? "#3a1a1a" : C.border}`,
+                boxShadow: i === 0 ? `0 0 0 1px ${C.greenBd}, 0 6px 20px rgba(29,185,84,0.13)` : "none",
                 transition: "all 0.15s",
               }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
 
                 {/* Rank */}
-                <div style={{ width: "18px", fontSize: "11px", color: C.label,
+                <div style={{ width: "22px", fontSize: i < 3 ? "15px" : "11px",
+                  color: i === 0 ? C.green : C.label, fontWeight: i < 3 ? 800 : 400,
                   flexShrink: 0, textAlign: "center" }}>
-                  {i + 1}
+                  {i < 3 ? ["👑", "🥈", "🥉"][i] : i + 1}
                 </div>
 
                 {/* Album art */}
@@ -573,6 +606,25 @@ function Room({ roomId, myName, onLeave }) {
                     onMouseLeave={e => e.target.style.color = C.border}>
                     ↗
                   </a>
+                </div>
+                </div>
+
+                {/* Reactions */}
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", paddingLeft: "32px" }}>
+                  {REACTIONS.map((em) => {
+                    const rx = (sub.reactions || []).find((x) => x.emoji === em);
+                    const cnt = rx?.count || 0;
+                    return (
+                      <button key={em} onClick={() => react(sub.id, em)}
+                        style={{ padding: "3px 9px", borderRadius: "12px", cursor: "pointer",
+                          fontSize: "12px", lineHeight: 1.4,
+                          background: rx?.mine ? C.greenBg : "#151515",
+                          border: `1px solid ${rx?.mine ? C.greenBd : C.border}`,
+                          color: cnt > 0 ? "#fff" : C.muted }}>
+                        {em}{cnt > 0 ? ` ${cnt}` : ""}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );
