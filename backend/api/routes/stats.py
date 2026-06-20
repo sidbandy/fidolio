@@ -2,7 +2,10 @@ from fastapi import APIRouter, Query
 from typing import Literal
 import psycopg2
 import os
+import time
+from datetime import timedelta
 from dotenv import load_dotenv
+from api.routes.library import fetch_album_cover
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 router = APIRouter()
@@ -221,6 +224,93 @@ def top_albums(
          "first_saved": str(r[5])}
         for r in rows
     ]}
+
+# ── Top Albums (rich): ownership/completion + real "album listen" sessions ──
+# Listening history only goes back to when polling began, so listen-sessions are
+# a *growing* secondary signal layered on top of the reliable ownership ranking.
+_TOP_ALBUMS_CACHE = {}   # user_id -> (timestamp, payload)
+_TOP_ALBUMS_TTL = 3600
+_SESSION_GAP = timedelta(minutes=30)   # plays farther apart aren't one sitting
+
+
+def _listen_sessions(cur, user_id):
+    """Best consecutive same-album play-run per album, from listening history.
+    Returns {(album_lower, artist_lower): {"run": n, "date": "YYYY-MM-DD"}}."""
+    cur.execute("""
+        SELECT t.album, t.artist, lh.played_at
+        FROM listening_history lh
+        JOIN tracks t ON t.id = lh.track_id
+        WHERE lh.user_id = %s AND t.album IS NOT NULL AND t.album != ''
+        ORDER BY lh.played_at ASC
+    """, (user_id,))
+    best = {}
+    cur_key = cur_start = last_at = None
+    run = 0
+
+    def _flush():
+        if not cur_key or run < 2:
+            return
+        prev = best.get(cur_key)
+        if not prev or run > prev["run"]:
+            best[cur_key] = {"run": run, "date": str(cur_start.date())}
+
+    for album, artist, played_at in cur.fetchall():
+        key = (album.lower(), (artist or "").lower())
+        if key == cur_key and last_at and (played_at - last_at) <= _SESSION_GAP:
+            run += 1
+        else:
+            _flush()
+            cur_key, cur_start, run = key, played_at, 1
+        last_at = played_at
+    _flush()
+    return best
+
+
+@router.get("/top-albums-rich")
+def top_albums_rich(
+    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    limit: int = Query(18, le=40),
+):
+    cached = _TOP_ALBUMS_CACHE.get(user_id)
+    if cached and (time.time() - cached[0] < _TOP_ALBUMS_TTL):
+        return {"albums": cached[1][:limit], "cached": True}
+
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""
+        SELECT album, artist, COUNT(*) AS owned,
+               ROUND(AVG(energy)::numeric, 2)  AS avg_energy,
+               ROUND(AVG(valence)::numeric, 2) AS avg_mood,
+               MIN(saved_at)::date             AS first_saved
+        FROM tracks
+        WHERE user_id = %s AND album IS NOT NULL AND album != ''
+        GROUP BY album, artist
+        ORDER BY owned DESC
+        LIMIT %s
+    """, (user_id, limit))
+    rows = cur.fetchall()
+    sessions = _listen_sessions(cur, user_id)
+    cur.close(); conn.close()
+
+    albums = []
+    for album, artist, owned, avg_energy, avg_mood, first_saved in rows:
+        cov = fetch_album_cover(album, artist)
+        total = cov.get("nb_tracks")
+        completion = round(min(owned / total, 1.0), 2) if total else None
+        sess = sessions.get((album.lower(), (artist or "").lower()))
+        listened = bool(sess and (sess["run"] >= 4 or (total and sess["run"] >= 0.5 * total)))
+        albums.append({
+            "album": album, "artist": artist,
+            "owned": owned, "total_tracks": total, "completion": completion,
+            "cover": cov.get("cover"),
+            "avg_energy": float(avg_energy) if avg_energy else None,
+            "avg_mood": float(avg_mood) if avg_mood else None,
+            "first_saved": str(first_saved),
+            "listen_session": {"run": sess["run"], "date": sess["date"]} if listened else None,
+        })
+
+    _TOP_ALBUMS_CACHE[user_id] = (time.time(), albums)
+    return {"albums": albums}
+
 
 @router.get("/taste-timeline")
 def taste_timeline(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):

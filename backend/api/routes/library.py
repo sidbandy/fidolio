@@ -89,6 +89,42 @@ def artist_image(name: str):
     return {"name": name, "image": img}
 
 
+# ── Album covers (Deezer proxy + cache) — Top Albums + discovery studio ──
+# Deezer's album search returns the cover AND nb_tracks in one call, so we get
+# both the artwork and the completion denominator (owned / total) for free.
+_ALBUM_COVER_CACHE = {}
+
+
+def fetch_album_cover(album: str, artist: str = ""):
+    """{cover, nb_tracks, artist} for an album via Deezer. Cached in-process."""
+    key = f"{(artist or '').strip().lower()}|{(album or '').strip().lower()}"
+    if key in _ALBUM_COVER_CACHE:
+        return _ALBUM_COVER_CACHE[key]
+    out = {"cover": None, "nb_tracks": None, "artist": artist}
+    if album:
+        q = f'{artist} {album}'.strip()
+        try:
+            r = requests.get("https://api.deezer.com/search/album",
+                             params={"q": q, "limit": 1}, timeout=6)
+            data = r.json().get("data", [])
+            if data:
+                a = data[0]
+                out = {
+                    "cover": a.get("cover_medium") or a.get("cover_big") or a.get("cover"),
+                    "nb_tracks": a.get("nb_tracks"),
+                    "artist": (a.get("artist") or {}).get("name") or artist,
+                }
+        except Exception:
+            pass
+    _ALBUM_COVER_CACHE[key] = out
+    return out
+
+
+@router.get("/album-cover")
+def album_cover(album: str, artist: str = ""):
+    return {"album": album, **fetch_album_cover(album, artist)}
+
+
 def get_spotify():
     import spotipy
     from spotipy.oauth2 import SpotifyOAuth

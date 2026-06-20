@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { C, TYPE, FONT, MOOD, moodKey, axisTick, chartTooltip } from "../theme";
 import { PageHeader, StatBlock, Card, Reveal, Pill, Department, EmptyState, InfoTip } from "../ui";
+import ArtistAvatar from "../components/ArtistAvatar";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -94,6 +95,138 @@ function RankRow({ i, title, sub, right, bar }) {
   );
 }
 
+// ── Charts: Top Artists podium (photos peek over the cards) + Top-100 list ──
+function Podium({ artists }) {
+  const top = artists.slice(0, 3).map((a, i) => ({ ...a, rank: i + 1 }));
+  if (!top.length) return null;
+  const order = top.length === 3 ? [top[1], top[0], top[2]] : top; // 2nd · 1st · 3rd
+  const max = top[0].songs || 1;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 16, paddingTop: 56, flexWrap: "wrap" }}>
+      {order.map((a) => {
+        const first = a.rank === 1;
+        const photo = first ? 96 : 74;
+        return (
+          <div key={a.artist} style={{ flex: "1 1 150px", maxWidth: 230, display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ position: "relative", zIndex: 2, marginBottom: -(photo * 0.5) }}>
+              <ArtistAvatar name={a.artist} size={photo} eager ring={`3px solid ${first ? C.green : C.border2}`} />
+            </div>
+            <Card style={{ width: "100%", textAlign: "center", overflow: "visible", paddingTop: photo * 0.5 + 16, minHeight: first ? 150 : 124, borderColor: first ? C.greenBd : C.border, background: first ? C.greenBg : C.card }}>
+              <div style={{ fontFamily: FONT.display, fontSize: first ? 30 : 24, fontWeight: 700, color: first ? C.green : C.muted, lineHeight: 1 }}>{String(a.rank).padStart(2, "0")}</div>
+              <div style={{ fontSize: first ? 16 : 14, fontWeight: 700, color: "#fff", marginTop: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artist}</div>
+              <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{a.songs} songs</div>
+              <div style={{ height: 3, background: C.border, borderRadius: 2, marginTop: 10 }}>
+                <div style={{ height: 3, borderRadius: 2, background: first ? C.green : C.sub, width: `${(a.songs / max) * 100}%` }} />
+              </div>
+            </Card>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Square-cell mosaic: tile area scales with count (bigger = more), packed dense.
+const CELL = 116;
+const MOSAIC_GRID = {
+  display: "grid",
+  gridTemplateColumns: `repeat(auto-fill, ${CELL}px)`,
+  gridAutoRows: `${CELL}px`,
+  gridAutoFlow: "dense",
+  gap: 10,
+  justifyContent: "center",
+};
+// count → cell span (1..3), relative to the biggest item in the set.
+function spanFor(count, max) {
+  const r = count / (max || 1);
+  if (r >= 0.7) return 3;
+  if (r >= 0.38) return 2;
+  return 1;
+}
+const scrim = {
+  position: "absolute", left: 0, right: 0, bottom: 0, padding: "18px 10px 8px",
+  background: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))",
+};
+
+function ArtistTile({ a, rank, span }) {
+  const fs = span >= 2 ? 14 : 12;
+  return (
+    <div style={{ gridColumn: `span ${span}`, gridRow: `span ${span}`, position: "relative", borderRadius: 10, overflow: "hidden", background: C.card2, border: `1px solid ${C.border}` }}>
+      <ArtistAvatar name={a.artist} fill radius={0} />
+      <span style={{ position: "absolute", top: 7, left: 9, fontFamily: FONT.display, fontSize: span >= 2 ? 15 : 12, fontWeight: 700, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.8)", fontVariantNumeric: "tabular-nums" }}>{String(rank).padStart(2, "0")}</span>
+      <div style={scrim}>
+        <div style={{ fontSize: fs, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artist}</div>
+        <div style={{ fontSize: 11, color: "#cfcfcf", marginTop: 1 }}>{a.songs} songs</div>
+      </div>
+    </div>
+  );
+}
+
+function AlbumTile({ al, span }) {
+  const initial = ((al.album || "?").trim()[0] || "?").toUpperCase();
+  const big = span >= 2;
+  return (
+    <div style={{ gridColumn: `span ${span}`, gridRow: `span ${span}`, position: "relative", borderRadius: 10, overflow: "hidden", background: C.card2, border: `1px solid ${C.border}` }}>
+      {al.cover ? (
+        <img src={al.cover} alt={al.album} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      ) : (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.display, fontSize: 40, fontWeight: 700, color: C.faint }}>{initial}</div>
+      )}
+      {al.listen_session && (
+        <div title={`Best run ${al.listen_session.run} tracks · ${al.listen_session.date}`} style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 20, background: "rgba(0,0,0,0.74)", border: `1px solid ${C.greenBd}` }}>
+          <span style={{ color: C.green, fontSize: 9 }}>▶</span>
+          {big && <span style={{ ...TYPE.micro, color: "#fff", letterSpacing: "0.5px", fontSize: 9 }}>in full</span>}
+        </div>
+      )}
+      <div style={scrim}>
+        <div style={{ fontSize: big ? 14 : 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{al.album}</div>
+        {big && <div style={{ fontSize: 11, color: "#cfcfcf", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{al.artist}</div>}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+          <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.22)", borderRadius: 2 }}>
+            <div style={{ height: 3, borderRadius: 2, background: C.green, width: `${Math.round((al.completion ?? 0) * 100)}%` }} />
+          </div>
+          <span style={{ fontSize: 10, color: "#cfcfcf", fontVariantNumeric: "tabular-nums" }}>{al.total_tracks ? `${al.owned}/${al.total_tracks}` : al.owned}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Charts({ artists, albums }) {
+  if (!artists || !albums) {
+    return <div style={{ ...TYPE.body, padding: "40px 0" }}>Loading your charts…</div>;
+  }
+  const rest = artists.slice(3);
+  const maxRest = rest[0]?.songs || 1;
+  const maxOwned = albums[0]?.owned || 1;
+  return (
+    <>
+      <Reveal>
+        <Department no="—" title="Top Artists" right={<span style={{ ...TYPE.micro, color: C.muted }}>by songs saved</span>} />
+        <Podium artists={artists} />
+        {rest.length > 0 && (
+          <div style={{ ...MOSAIC_GRID, marginTop: 28 }}>
+            {rest.map((a, i) => <ArtistTile key={a.artist} a={a} rank={i + 4} span={spanFor(a.songs, maxRest)} />)}
+          </div>
+        )}
+      </Reveal>
+
+      <Reveal>
+        <div style={{ marginTop: 52 }}>
+          <Department no="—" title="Top Albums" right={<span style={{ ...TYPE.micro, color: C.muted }}>sized by songs saved · ▶ played in full</span>} />
+          {albums.length === 0 ? (
+            <EmptyState title="No albums yet" hint="Save more tracks to build your album charts." />
+          ) : (
+            <div style={MOSAIC_GRID}>
+              {albums.map((al) => <AlbumTile key={`${al.album}-${al.artist}`} al={al} span={spanFor(al.owned, maxOwned)} />)}
+            </div>
+          )}
+        </div>
+      </Reveal>
+    </>
+  );
+}
+
 export default function Identity() {
   const [sonic, setSonic] = useState(null);
   const [period, setPeriod] = useState("month");
@@ -101,6 +234,16 @@ export default function Identity() {
   const [allTime, setAllTime] = useState(null);
   const [languages, setLanguages] = useState(null);
   const [rhPage, setRhPage] = useState(0);
+  const [view, setView] = useState("fingerprint");
+  const [topArtists, setTopArtists] = useState(null);
+  const [topAlbums, setTopAlbums] = useState(null);
+
+  // Lazy-load the Charts data the first time it's opened.
+  useEffect(() => {
+    if (view !== "charts" || topArtists) return;
+    fetch(`${API}/library/top-saved-artists?limit=100`).then((r) => r.json()).then((d) => setTopArtists(d.artists || []));
+    fetch(`${API}/stats/top-albums-rich?limit=18`).then((r) => r.json()).then((d) => setTopAlbums(d.albums || []));
+  }, [view, topArtists]);
 
   useEffect(() => {
     fetch(`${API}/stats/sonic-identity`).then((r) => r.json()).then(setSonic);
@@ -179,6 +322,12 @@ export default function Identity() {
             kicker="Nº 01 · Identity"
             title={headline}
             accent={accent}
+            actions={
+              <div style={{ display: "flex", gap: 8 }}>
+                <Pill active={view === "fingerprint"} onClick={() => setView("fingerprint")}>Fingerprint</Pill>
+                <Pill active={view === "charts"} onClick={() => setView("charts")}>Charts</Pill>
+              </div>
+            }
             lede={
               <>
                 Your library's fingerprint, built from{" "}
@@ -199,6 +348,7 @@ export default function Identity() {
       </div>
 
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "44px 24px 64px" }}>
+        {view === "fingerprint" && (<>
         {/* Fingerprint */}
         <Reveal>
           <Department no="—" title="Fingerprint" />
@@ -383,6 +533,9 @@ export default function Identity() {
             </Reveal>
           );
         })()}
+        </>)}
+
+        {view === "charts" && <Charts artists={topArtists} albums={topAlbums} />}
       </div>
     </div>
   );
