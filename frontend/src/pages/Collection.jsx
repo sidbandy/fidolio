@@ -55,7 +55,6 @@ export default function Collection() {
   // Health state
   const [duplicates, setDuplicates] = useState(null);
   const [deadSaves, setDeadSaves] = useState(null);
-  const [topArtists, setTopArtists] = useState(null);
   const [healthTab, setHealthTab] = useState("duplicates");
   const [deadShown, setDeadShown] = useState(60);
 
@@ -100,7 +99,6 @@ export default function Collection() {
     fetch(`${API}/library/moods`).then((r) => r.json()).then((d) => setMoodList(d.moods || []));
     fetch(`${API}/library/duplicates`).then((r) => r.json()).then(setDuplicates);
     fetch(`${API}/library/dead-saves`).then((r) => r.json()).then(setDeadSaves);
-    fetch(`${API}/library/top-saved-artists?limit=20`).then((r) => r.json()).then(setTopArtists);
   }, []);
 
   const activeFilterCount =
@@ -110,7 +108,6 @@ export default function Collection() {
   const healthTabs = [
     { id: "duplicates", label: `Duplicates${duplicates ? ` (${duplicates.duplicates.length})` : ""}` },
     { id: "dead", label: `Dead Saves${deadSaves ? ` (${(deadSaves.total ?? deadSaves.dead_saves?.length) || 0})` : ""}` },
-    { id: "artists", label: "Top Artists" },
   ];
 
   return (
@@ -293,27 +290,6 @@ export default function Collection() {
               )
             )}
 
-            {healthTab === "artists" && (
-              !topArtists ? <div style={TYPE.body}>Loading…</div> : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                  {topArtists.artists.map((a, i) => (
-                    <Card key={i} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      <span style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 700, color: C.faint, minWidth: 30, fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{a.artist}</div>
-                        <div style={{ height: 3, background: C.border, borderRadius: 2, marginTop: 8 }}>
-                          <div style={{ height: 3, borderRadius: 2, background: C.green, width: `${(a.songs / (topArtists.artists[0]?.songs || 1)) * 100}%` }} />
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontFamily: FONT.display, fontSize: 18, fontWeight: 700, color: C.green }}>{a.songs}</div>
-                        <div style={{ ...TYPE.micro, color: C.faint }}>songs</div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              )
-            )}
           </Reveal>
         )}
       </div>

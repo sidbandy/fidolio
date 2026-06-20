@@ -233,7 +233,6 @@ export default function Identity() {
   const [wrapped, setWrapped] = useState(null);
   const [allTime, setAllTime] = useState(null);
   const [languages, setLanguages] = useState(null);
-  const [rhPage, setRhPage] = useState(0);
   const [view, setView] = useState("fingerprint");
   const [topArtists, setTopArtists] = useState(null);
   const [topAlbums, setTopAlbums] = useState(null);
@@ -294,7 +293,7 @@ export default function Identity() {
     );
   }
 
-  const { averages, mood_distribution, energy_distribution, dominant_key, rabbit_holes } = sonic;
+  const { averages, mood_distribution, energy_distribution, dominant_key } = sonic;
 
   const radarData = [
     { feature: "Energy", value: Math.round(averages.energy * 100) },
@@ -483,56 +482,6 @@ export default function Identity() {
             </>
           )}
         </Reveal>
-
-        {/* Rabbit holes */}
-        {rabbit_holes?.length > 0 && (() => {
-          const pageSize = 5;
-          const pages = Math.ceil(rabbit_holes.length / pageSize);
-          const shown = rabbit_holes.slice(rhPage * pageSize, rhPage * pageSize + pageSize);
-          const maxSaved = Math.max(...rabbit_holes.map((r) => r.songs_saved));
-          const dayGap = (a, b) => Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000));
-          return (
-            <Reveal>
-              <div style={{ marginTop: 48 }}>
-                <Department
-                  no="—"
-                  title="Rabbit Holes"
-                  right={
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ ...TYPE.micro, color: C.muted }}>artists you binged hardest</span>
-                      {pages > 1 && (
-                        <Pill active={false} onClick={() => setRhPage((p) => (p + 1) % pages)} style={{ minHeight: 30, padding: "4px 12px", fontSize: 11 }}>↻ Refresh</Pill>
-                      )}
-                    </div>
-                  }
-                />
-                <Card>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {shown.map((rh, idx) => {
-                      const i = rhPage * pageSize + idx;
-                      const days = dayGap(rh.first_save, rh.last_save);
-                      return (
-                        <div key={rh.artist} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 4px", borderTop: idx === 0 ? "none" : `1px solid ${C.border}` }}>
-                          <span style={{ fontFamily: FONT.display, fontSize: 15, fontWeight: 700, color: C.faint, width: 26, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{String(i + 1).padStart(2, "0")}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{rh.artist}</div>
-                            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-                              {days === 0 ? `${rh.songs_saved} songs in one sitting · ${rh.first_save}` : `${rh.songs_saved} songs over ${days} day${days === 1 ? "" : "s"} · ${rh.first_save} → ${rh.last_save}`}
-                            </div>
-                            <div style={{ height: 3, background: C.border, borderRadius: 2, marginTop: 8, maxWidth: 320 }}>
-                              <div style={{ height: 3, borderRadius: 2, background: C.green, width: `${(rh.songs_saved / maxSaved) * 100}%` }} />
-                            </div>
-                          </div>
-                          <div style={{ ...TYPE.stat, fontSize: 26, color: C.green }}>{rh.songs_saved}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              </div>
-            </Reveal>
-          );
-        })()}
         </>)}
 
         {view === "charts" && <Charts artists={topArtists} albums={topAlbums} />}

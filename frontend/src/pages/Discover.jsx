@@ -545,49 +545,50 @@ function BlindSpotsView() {
   );
 }
 
-/* ─────────────────────────── DEEPER (rabbit holes) ─────────────────────────── */
-function DeeperFront({ h, rank, maxSaved }) {
-  const days = Math.max(0, Math.round((new Date(h.last_save) - new Date(h.first_save)) / 86400000));
+/* ─────────────────────────── RABBIT HOLES (deeper) ─────────────────────────── */
+function DeeperFront({ h, rank, maxSaved, top, playing, play }) {
   return (
-    <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ ...TYPE.micro, color: C.faint }}>Nº {String(rank).padStart(2, "0")}</div>
-          <div style={{ fontFamily: FONT.display, fontSize: 22, fontWeight: 800, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.artist}</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.artist}</div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontFamily: FONT.display, fontSize: 26, fontWeight: 700, color: C.green }}>{h.songs_saved}</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 24, fontWeight: 700, color: C.green }}>{h.songs_saved}</div>
           <div style={{ ...TYPE.micro, color: C.faint }}>saved</div>
         </div>
       </div>
-      <div style={{ height: 4, background: C.border, borderRadius: 2, marginTop: 14 }}>
+      <div style={{ height: 4, background: C.border, borderRadius: 2, marginTop: 12 }}>
         <div style={{ height: 4, borderRadius: 2, background: C.green, width: `${(h.songs_saved / maxSaved) * 100}%` }} />
       </div>
-      <div style={{ fontSize: 12.5, color: C.sub, marginTop: 14, lineHeight: 1.5 }}>
-        {days === 0 ? `You saved ${h.songs_saved} of their songs in one sitting on ${h.first_save}.` : `You binged ${h.songs_saved} of their songs over ${days} day${days === 1 ? "" : "s"} — ${h.first_save} → ${h.last_save}.`}
+      <div style={{ ...TYPE.micro, color: C.muted, marginTop: 16, marginBottom: 4 }}>
+        Play next {top ? (top.plays > 0 ? "· your most-played" : "· best taste-fit") : ""}
       </div>
-      <div style={faceHint}>tap for what's next ⤿</div>
+      {top
+        ? <div onClick={(e) => e.stopPropagation()}><TrackRow track={top} playing={playing} onPlay={play} /></div>
+        : <div style={{ ...TYPE.body, fontSize: 12, padding: "8px 0" }}>Loading their tracks…</div>}
+      <div style={faceHint}>tap for more ⤿</div>
     </div>
   );
 }
 
-function DeeperBack({ h, data }) {
-  const loading = !data || data.loading;
+function DeeperBack({ h, rest }) {
   return (
     <div style={{ height: "100%", background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ ...TYPE.micro, color: C.green, marginBottom: 10 }}>Continue down the {h.artist} hole</div>
-      {loading ? <div style={{ ...TYPE.body, fontSize: 12 }}>Finding their best tracks…</div> :
-        data.tracks?.length ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {data.tracks.map((t, i) => (
-              <a key={i} href={`https://open.spotify.com/search/${encodeURIComponent(h.artist + " " + t.name)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-                <span style={{ fontFamily: FONT.display, fontSize: 12, fontWeight: 700, color: C.green, width: 16 }}>{i + 1}</span>
-                <span style={{ flex: 1, fontSize: 13, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
-                {t.owned ? <span style={{ fontSize: 9, color: C.green, border: `1px solid ${C.greenBd}`, padding: "1px 5px", borderRadius: 4 }}>OWNED</span> : <span style={{ fontSize: 11, color: C.green }}>↗</span>}
-              </a>
-            ))}
-          </div>
-        ) : <div style={{ ...TYPE.body, fontSize: 12 }}>Couldn't find their top tracks.</div>}
+      <div style={{ ...TYPE.micro, color: C.green, marginBottom: 12 }}>More from {h.artist}</div>
+      {rest?.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {rest.map((t, i) => (
+            <a key={t.id || i} href={t.spotify_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+              <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.green, width: 16 }}>{i + 1}</span>
+              <span style={{ flex: 1, fontSize: 13, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+              {t.plays > 0 && <span style={{ fontSize: 10, color: "#7bbf93" }}>{t.plays}×</span>}
+              <span style={{ fontSize: 12, color: C.green }}>↗</span>
+            </a>
+          ))}
+        </div>
+      ) : <div style={{ ...TYPE.body, fontSize: 12 }}>A focused hole — just the one above.</div>}
       <div style={faceHint}>tap to flip back ⤾</div>
     </div>
   );
@@ -599,6 +600,7 @@ function DeeperView() {
   const [flipped, setFlipped] = useState({});
   const [tracks, setTracks] = useState({});
   const requested = useRef(new Set());
+  const { playing, play } = usePreview();
 
   useEffect(() => {
     fetch(`${API}/stats/sonic-identity`).then((r) => r.json()).then((d) => setHoles(d.rabbit_holes || [])).catch(() => setHoles([]));
@@ -610,32 +612,35 @@ function DeeperView() {
   const shown = all.slice(page * pageSize, page * pageSize + pageSize);
   const maxSaved = all.length ? Math.max(...all.map((h) => h.songs_saved)) : 1;
 
+  // Per-artist tracks ranked by YOUR plays then taste-fit (distinct per card).
   const loadTracks = (artist) => {
     if (requested.current.has(artist)) return;
     requested.current.add(artist);
-    setTracks((t) => ({ ...t, [artist]: { loading: true } }));
-    fetch(`${API}/albums/artist-top-tracks?artist=${encodeURIComponent(artist)}`).then((r) => r.json())
-      .then((d) => setTracks((t) => ({ ...t, [artist]: d }))).catch(() => setTracks((t) => ({ ...t, [artist]: { tracks: [] } })));
+    fetch(`${API}/discovery/rabbit-hole-tracks?artist=${encodeURIComponent(artist)}`).then((r) => r.json())
+      .then((d) => setTracks((t) => ({ ...t, [artist]: d.tracks || [] }))).catch(() => setTracks((t) => ({ ...t, [artist]: [] })));
   };
   useEffect(() => { shown.forEach((h) => loadTracks(h.artist)); /* eslint-disable-next-line */ }, [page, holes]);
 
   return (
     <Reveal>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 10, flexWrap: "wrap" }}>
-        <p style={{ ...TYPE.body, maxWidth: 520, margin: 0 }}>Artists you binged hardest. Tap to flip and see which of their tracks to play next.</p>
+        <p style={{ ...TYPE.body, maxWidth: 520, margin: 0 }}>Artists you binged hardest — with the track to play next (most-played or best taste-fit), previewable right here.</p>
         {pages > 1 && <Button variant="ghost" onClick={() => { setPage((p) => (p + 1) % pages); setFlipped({}); }}>↻ 5 different ones</Button>}
       </div>
       {!holes && <div style={{ ...TYPE.body }}>Loading…</div>}
       {holes && all.length === 0 && <EmptyState title="No rabbit holes yet" hint="Save a bunch of one artist in a short window and they'll show up." />}
       {shown.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
-          {shown.map((h, idx) => (
-            <FlipCard key={h.artist} height={260} flipped={!!flipped[h.artist]}
-              onFlip={() => { loadTracks(h.artist); setFlipped((f) => ({ ...f, [h.artist]: !f[h.artist] })); }}
-              front={<DeeperFront h={h} rank={page * pageSize + idx + 1} maxSaved={maxSaved} />}
-              back={<DeeperBack h={h} data={tracks[h.artist]} />}
-            />
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+          {shown.map((h, idx) => {
+            const data = tracks[h.artist];
+            return (
+              <FlipCard key={h.artist} height={300} flipped={!!flipped[h.artist]}
+                onFlip={() => { loadTracks(h.artist); setFlipped((f) => ({ ...f, [h.artist]: !f[h.artist] })); }}
+                front={<DeeperFront h={h} rank={page * pageSize + idx + 1} maxSaved={maxSaved} top={data?.[0]} playing={playing} play={play} />}
+                back={<DeeperBack h={h} rest={data?.slice(1, 4) || []} />}
+              />
+            );
+          })}
         </div>
       )}
     </Reveal>
@@ -676,6 +681,20 @@ function FindView() {
   );
 }
 
+/* ─────────────────────────── FRONTIER (blind spots + rabbit holes) ─────────────────────────── */
+function FrontierView() {
+  const [sub, setSub] = useState("blindspots");
+  return (
+    <div>
+      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 24 }}>
+        <button onClick={() => setSub("blindspots")} style={subTab(sub === "blindspots")}>Blind Spots</button>
+        <button onClick={() => setSub("rabbit")} style={subTab(sub === "rabbit")}>Rabbit Holes</button>
+      </div>
+      {sub === "blindspots" ? <BlindSpotsView /> : <DeeperView />}
+    </div>
+  );
+}
+
 /* ─────────────────────────── SHELL ─────────────────────────── */
 export default function Discover() {
   const [mode, setMode] = useState("find");
@@ -687,12 +706,11 @@ export default function Discover() {
             kicker="Nº 03 · Discover"
             title="Discover"
             accent={C.indigo}
-            lede="Search your library, get recommendations tuned to your taste, and vet any album before you commit."
+            lede="Search your library, get recommendations tuned to your taste, and explore the edges of it."
             actions={
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Pill active={mode === "find"} onClick={() => setMode("find")}>Find</Pill>
-                <Pill active={mode === "blindspots"} onClick={() => setMode("blindspots")}>Blind Spots</Pill>
-                <Pill active={mode === "deeper"} onClick={() => setMode("deeper")}>Deeper</Pill>
+                <Pill active={mode === "frontier"} onClick={() => setMode("frontier")}>Frontier</Pill>
               </div>
             }
           />
@@ -700,8 +718,7 @@ export default function Discover() {
       </div>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 24px 64px" }}>
         {mode === "find" && <FindView />}
-        {mode === "blindspots" && <BlindSpotsView />}
-        {mode === "deeper" && <DeeperView />}
+        {mode === "frontier" && <FrontierView />}
       </div>
     </div>
   );
