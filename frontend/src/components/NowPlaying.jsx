@@ -24,6 +24,8 @@ export default function NowPlaying({ variant = "bar" }) {
   const [lyricLines, setLyricLines] = useState(null);   // null=loading, []=none, [...]=synced
   const [lyricIdx, setLyricIdx] = useState(0);
   const [plainLyrics, setPlainLyrics] = useState("");
+  const [showSig, setShowSig] = useState(false);
+  const [domColor, setDomColor] = useState(null);
   const lastFetchTime = useRef(null);
   const trackRef = useRef(null);
   const { playing: previewId, current: preview, analyser, stop: stopPreview } = usePreviewContext();
@@ -76,6 +78,33 @@ export default function NowPlaying({ variant = "bar" }) {
     }, 250);
     return () => clearInterval(id);
   }, [lyricsView, lyricLines]);
+
+  // Pull a vivid dominant color from the album art for the signature overlay.
+  // Spotify's CDN may taint the canvas (no CORS) — if so we fall back to mood color.
+  useEffect(() => {
+    if (!track?.album_art) { setDomColor(null); return; }
+    let alive = true;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas"); c.width = 16; c.height = 16;
+        const g = c.getContext("2d"); g.drawImage(img, 0, 0, 16, 16);
+        const data = g.getImageData(0, 0, 16, 16).data;
+        let r = 0, gg = 0, b = 0, n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const R = data[i], G = data[i + 1], B = data[i + 2];
+          const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+          if (mx - mn < 22 || mx < 40 || mx > 232) continue;   // skip greys/black/white
+          r += R; gg += G; b += B; n++;
+        }
+        if (alive) setDomColor(n > 4 ? `rgb(${Math.round(r / n)},${Math.round(gg / n)},${Math.round(b / n)})` : null);
+      } catch { if (alive) setDomColor(null); }
+    };
+    img.onerror = () => { if (alive) setDomColor(null); };
+    img.src = track.album_art;
+    return () => { alive = false; };
+  }, [track?.album_art]);
 
   const fetchLyrics = async () => {
     if (!track) return;
@@ -236,7 +265,18 @@ export default function NowPlaying({ variant = "bar" }) {
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.35)" }}>
               <div style={{ height: 3, background: C.green, width: `${progressPct}%`, transition: "width 1s linear" }} />
             </div>
-            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "30px 12px 11px", background: "linear-gradient(transparent, rgba(0,0,0,0.92))" }}>
+            {showSig && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center",
+                background: "radial-gradient(circle at 50% 45%, rgba(0,0,0,0.32), rgba(0,0,0,0.64))" }}>
+                <Waveform size={150} active={false} features={f} valence={f?.valence} color={domColor || moodColor(f?.valence)} seed={track.name} />
+              </div>
+            )}
+            <button onClick={() => setShowSig((s) => !s)} title="Sonic signature"
+              style={{ position: "absolute", top: 8, right: 8, zIndex: 3, width: 30, height: 30, borderRadius: "50%",
+                border: `1px solid ${showSig ? C.green : "rgba(255,255,255,0.28)"}`,
+                background: showSig ? C.green : "rgba(0,0,0,0.5)", color: showSig ? "#000" : "#fff",
+                cursor: "pointer", fontSize: 15, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(3px)" }}>∿</button>
+            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "30px 12px 11px", background: "linear-gradient(transparent, rgba(0,0,0,0.92))", zIndex: 2 }}>
               {track.in_library && (
                 <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: "rgba(13,43,24,0.85)", padding: "2px 6px", borderRadius: 4, marginBottom: 5, display: "inline-block" }}>IN LIBRARY</span>
               )}
@@ -256,10 +296,6 @@ export default function NowPlaying({ variant = "bar" }) {
             </>}
           </div>
 
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ ...KICKER, color: C.muted, fontSize: 9, marginBottom: 8, alignSelf: "flex-start" }}>Sonic signature</div>
-            <Waveform size={104} active={false} features={f} valence={f?.valence} seed={track.name} />
-          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
             <button onClick={() => setLyricsView(true)} style={{ width: "100%", padding: "9px 8px", borderRadius: 9, border: `1px solid ${C.greenBd}`, background: C.greenBg, color: C.green, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>♫ Lyrics</button>

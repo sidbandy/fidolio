@@ -78,7 +78,9 @@ function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
         </nav>
 
         {/* Now Playing lives at the foot of the spine */}
-        <NowPlaying variant="panel" />
+        <div style={{ flex: 1, minHeight: 0, paddingTop: 18, display: "flex", flexDirection: "column" }}>
+          <NowPlaying variant="panel" />
+        </div>
       </aside>
 
       {collapsed && (

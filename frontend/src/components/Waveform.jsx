@@ -21,7 +21,7 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x || 0));
 
 export default function Waveform({
   size = 44, active = false, analyser = null,
-  features = null, seed = "x", valence = null, glow = true,
+  features = null, seed = "x", valence = null, glow = true, color: colorProp = null,
 }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(0);
@@ -39,7 +39,7 @@ export default function Waveform({
     const f = features || {};
     const energy = clamp01(f.energy ?? 0.5);
     const tempo = f.tempo || 110;
-    const color = valence != null ? moodColor(valence) : C.green;
+    const color = colorProp || (valence != null ? moodColor(valence) : C.green);
     const cx = size / 2, cy = size / 2;
     const baseR = size * 0.23;          // resting radius (room to pulse + spike)
     const maxAmp = size * 0.24;         // spike height
@@ -119,7 +119,7 @@ export default function Waveform({
 
     rafRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [size, active, analyser, features, seed, valence, glow]);
+  }, [size, active, analyser, features, seed, valence, glow, colorProp]);
 
   return <canvas ref={canvasRef} style={{ width: size, height: size, display: "block" }} />;
 }
