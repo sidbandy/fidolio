@@ -720,6 +720,13 @@ function RecommendStudio() {
   const [loading, setLoading] = useState(false);
   const [mixes, setMixes] = useState(null);
   const [coords, setCoords] = useState(null);
+  const [lang, setLang] = useState("");
+  const [mood, setMood] = useState("");
+  const [moodList, setMoodList] = useState([]);
+
+  useEffect(() => {
+    fetch(`${API}/library/moods`).then((r) => r.json()).then((d) => setMoodList(d.moods || [])).catch(() => {});
+  }, []);
 
   const toggleWeather = () => {
     if (coords) { setCoords(null); return; }
@@ -752,16 +759,18 @@ function RecommendStudio() {
   };
 
   useEffect(() => {
-    if (!seeds.length && !vibe && !coords) { setResult(null); return; }
+    if (!seeds.length && !vibe && !coords && !lang && !mood) { setResult(null); return; }
     setLoading(true);
     const p = new URLSearchParams();
     seeds.forEach((s) => p.append("seed", `${s.type}|${s.name}|${s.artist || ""}`));
     if (vibe) p.set("vibe", vibe);
     if (coords) { p.set("lat", coords.lat); p.set("lon", coords.lon); }
+    if (lang) p.set("lang", lang);
+    if (mood) p.set("mood", mood);
     p.set("size", "10");
     fetch(`${API}/discovery/recommend?${p}`).then((r) => r.json())
       .then((d) => { setResult(d); setLoading(false); }).catch(() => setLoading(false));
-  }, [seeds, vibe, coords]);
+  }, [seeds, vibe, coords, lang, mood]);
 
   // Debounce the free-text "describe it" box into the vibe used for recs.
   useEffect(() => {
@@ -835,6 +844,16 @@ function RecommendStudio() {
           <Pill active={!!coords} onClick={toggleWeather} style={{ minHeight: 34, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <WeatherIcon size={14} color={coords ? "#000" : C.sub} /> Weather
           </Pill>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+          <select value={lang} onChange={(e) => setLang(e.target.value)} style={input({ minWidth: 140, fontSize: 12, color: lang ? "#fff" : C.sub })}>
+            <option value="">Any language</option>
+            {LANGUAGES.filter(Boolean).map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}</option>)}
+          </select>
+          <select value={mood} onChange={(e) => setMood(e.target.value)} style={input({ minWidth: 140, fontSize: 12, color: mood ? "#fff" : C.sub })}>
+            <option value="">Any mood</option>
+            {moodList.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
         </div>
         {result?.weather && (
           <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, background: "#151515", border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px" }}>

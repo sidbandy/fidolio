@@ -7,7 +7,7 @@ import time as _time
 from datetime import datetime
 from dotenv import load_dotenv
 from core import similarity
-from api.routes.library import compute_moods, fetch_album_cover
+from api.routes.library import compute_moods, fetch_album_cover, MOODS
 
 load_dotenv()
 router = APIRouter()
@@ -552,17 +552,22 @@ def _resolve_seed(cur, user_id, seed):
         ctx["artists"] = [artist] if artist else []
     return ctx
 
-def _owned_song_recs(cur, user_id, target, stats, exclude_ids, size=10):
+def _owned_song_recs(cur, user_id, target, stats, exclude_ids, size=10, lang=None, mood_sql=None):
     tv = similarity.to_vector(target, stats)
     e, v, t = target.get("energy", 0.5), target.get("valence", 0.5), target.get("tempo", 120)
     params = [user_id]
     excl = ""
     if exclude_ids:
         excl = " AND NOT (id = ANY(%s))"; params.append(list(exclude_ids))
+    extra = ""
+    if lang:
+        extra += " AND LOWER(language) = %s"; params.append(lang.lower())
+    if mood_sql:
+        extra += f" AND ({mood_sql})"   # trusted literal from MOODS
     params += [e, v, t]
     cur.execute(f"""
         SELECT id,name,artist,album,release_year,language,preview_url,{FEAT_COLS}, instrumentalness
-        FROM tracks WHERE user_id=%s AND energy IS NOT NULL{excl}
+        FROM tracks WHERE user_id=%s AND energy IS NOT NULL{excl}{extra}
         ORDER BY (ABS(energy-%s)*1.3 + ABS(valence-%s)*1.3 + ABS(tempo-%s)/120.0*0.8) ASC
         LIMIT 60
     """, params)
@@ -678,9 +683,10 @@ def recommend(
     min_energy: Optional[float] = Query(None), max_energy: Optional[float] = Query(None),
     min_valence: Optional[float] = Query(None), max_valence: Optional[float] = Query(None),
     lat: Optional[float] = Query(None), lon: Optional[float] = Query(None),
+    lang: Optional[str] = Query(None), mood: Optional[str] = Query(None),
     size: int = Query(10, le=20),
 ):
-    sig = f"{user_id}|{sorted(seed or [])}|{vibe}|{artists}|{language}|{min_tempo}|{max_tempo}|{min_energy}|{max_energy}|{min_valence}|{max_valence}|{lat}|{lon}|{size}"
+    sig = f"{user_id}|{sorted(seed or [])}|{vibe}|{artists}|{language}|{lang}|{mood}|{min_tempo}|{max_tempo}|{min_energy}|{max_energy}|{min_valence}|{max_valence}|{lat}|{lon}|{size}"
     hit = _REC_CACHE.get(sig)
     if hit and (_time.time() - hit[0] < _REC_TTL):
         return {**hit[1], "cached": True}
@@ -738,7 +744,8 @@ def recommend(
         seed_ids = get_seeds_from_library(cur, user_id,
                                           [a.strip() for a in artists.split(",")] if artists else None)
 
-    owned_songs = _owned_song_recs(cur, user_id, target, stats, set(seed_ids), size)
+    mood_sql = next((sql for k, _l, sql in MOODS if k == mood), None) if mood else None
+    owned_songs = _owned_song_recs(cur, user_id, target, stats, set(seed_ids), size, lang=lang, mood_sql=mood_sql)
     owned_albums_out = _owned_album_recs(cur, user_id, target, stats, exclude_album, size=2)
     cur.close(); conn.close()
 
