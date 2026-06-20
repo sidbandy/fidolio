@@ -770,7 +770,7 @@ def rabbit_hole_tracks(artist: str, user_id: str = Query("0tz6fep2m5bx1vq85g4851
     cur.execute(f"""
         SELECT t.id, t.name, COUNT(lh.id) AS plays, {", ".join("t."+c.strip() for c in FEAT_COLS.split(","))}, t.instrumentalness
         FROM tracks t LEFT JOIN listening_history lh ON lh.track_id = t.id
-        WHERE t.user_id=%s AND LOWER(t.artist)=LOWER(%s) AND t.energy IS NOT NULL
+        WHERE t.user_id=%s AND LOWER(t.artist)=LOWER(%s)
         GROUP BY t.id, t.name, t.energy, t.valence, t.tempo, t.danceability, t.acousticness, t.instrumentalness
     """, (user_id, artist))
     rows = cur.fetchall()

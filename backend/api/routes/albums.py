@@ -283,15 +283,28 @@ def blind_spot_detail(
     seed = [a.strip() for a in artists.split(",") if a.strip()][:2]
     recs = {}
     if LASTFM_KEY:
+        # Genre-representative artists — distinct PER genre, so different blind spots
+        # don't all surface the same recommendations (the core fix).
+        try:
+            r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
+                "method": "tag.getTopArtists", "tag": genre, "limit": 30,
+                "api_key": LASTFM_KEY, "format": "json"}, timeout=6)
+            for i, ta in enumerate(r.json().get("topartists", {}).get("artist", [])):
+                nm = ta.get("name")
+                if nm:
+                    recs[nm] = recs.get(nm, 0.0) + (1.0 - i / 30.0)
+        except Exception:
+            pass
+        # Boost artists similar to the ones you already own in this genre (taste-fit).
         for a in seed:
             try:
                 r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
-                    "method": "artist.getSimilar", "artist": a, "limit": 15,
+                    "method": "artist.getSimilar", "artist": a, "limit": 12,
                     "api_key": LASTFM_KEY, "format": "json"}, timeout=6)
                 for sim in r.json().get("similarartists", {}).get("artist", []):
                     nm = sim.get("name")
                     if nm:
-                        recs[nm] = recs.get(nm, 0.0) + float(sim.get("match", 0) or 0)
+                        recs[nm] = recs.get(nm, 0.0) + 0.5 * float(sim.get("match", 0) or 0)
             except Exception:
                 continue
 

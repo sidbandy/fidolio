@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { C, FONT, moodColor, moodKey } from "../theme";
-import OrbitingWaveform from "../components/OrbitingWaveform";
+import Waveform from "../components/Waveform";
 import { usePreviewContext } from "../context/PreviewProvider";
 
 export function Badge({ children, color = C.muted }) {
@@ -94,30 +94,24 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         aria-label={isPlaying ? "Stop preview" : "Play preview"}
         style={{
           position: "relative",
-          width: 46,
-          height: 46,
+          width: 44,
+          height: 44,
           borderRadius: "50%",
-          border: `1px solid ${isPlaying ? "transparent" : C.border}`,
+          border: `1px solid ${isPlaying ? mc : C.border}`,
           cursor: "pointer",
           flexShrink: 0,
           padding: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: isPlaying ? "rgba(29,185,84,0.08)" : "#101010",
-          boxShadow: isPlaying ? `0 0 16px ${mc}55` : "none",
-          transform: isPlaying ? "scale(1.04)" : "none",
-          transition: "box-shadow 0.2s, transform 0.2s",
+          background: isPlaying ? "rgba(29,185,84,0.07)" : "#101010",
+          boxShadow: isPlaying ? `0 0 14px ${mc}44` : "none",
+          transition: "box-shadow 0.2s, border-color 0.2s",
         }}
       >
-        <OrbitingWaveform
-          size={46}
-          active={isPlaying}
-          analyser={isPlaying ? analyser : null}
-          features={track}
-          valence={track.valence}
-          seed={track.id || track.name || "x"}
-        />
+        {isPlaying && (
+          <Waveform size={40} active analyser={analyser} features={track} valence={track.valence} seed={track.id || track.name || "x"} />
+        )}
         <span
           style={{
             position: "absolute",

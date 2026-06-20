@@ -126,51 +126,46 @@ function Podium({ artists }) {
   );
 }
 
-// Square-cell mosaic: tile area scales with count (bigger = more), packed dense.
-const CELL = 116;
-const MOSAIC_GRID = {
-  display: "grid",
-  gridTemplateColumns: `repeat(auto-fill, ${CELL}px)`,
-  gridAutoRows: `${CELL}px`,
-  gridAutoFlow: "dense",
-  gap: 10,
-  justifyContent: "center",
-};
-// count → cell span (1..3), relative to the biggest item in the set.
-function spanFor(count, max) {
-  const r = count / (max || 1);
-  if (r >= 0.7) return 3;
-  if (r >= 0.38) return 2;
-  return 1;
-}
+// Continuous-size mosaic: each tile's pixel size scales smoothly with its count,
+// so 39 reads bigger than 32 reads bigger than 30 — no plateaus, no cliffs.
+const MOSAIC_WRAP = { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start" };
 const scrim = {
-  position: "absolute", left: 0, right: 0, bottom: 0, padding: "18px 10px 8px",
-  background: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))",
+  position: "absolute", left: 0, right: 0, bottom: 0, padding: "20px 9px 7px",
+  background: "linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0))",
 };
+// Map each item's count → a side length in [min,max], proportional across the set.
+function sizeTiles(items, getCount, min = 66, max = 150) {
+  const counts = items.map(getCount);
+  const lo = Math.min(...counts), hi = Math.max(...counts);
+  return items.map((it) => {
+    const t = hi > lo ? (getCount(it) - lo) / (hi - lo) : 1;
+    return { it, side: Math.round(min + t * (max - min)) };
+  });
+}
 
-function ArtistTile({ a, rank, span }) {
-  const fs = span >= 2 ? 14 : 12;
+function ArtistTile({ a, rank, side }) {
+  const big = side >= 110;
   return (
-    <div style={{ gridColumn: `span ${span}`, gridRow: `span ${span}`, position: "relative", borderRadius: 10, overflow: "hidden", background: C.card2, border: `1px solid ${C.border}` }}>
+    <div style={{ width: side, height: side, position: "relative", borderRadius: 10, overflow: "hidden", background: C.card2, border: `1px solid ${C.border}` }}>
       <ArtistAvatar name={a.artist} fill radius={0} />
-      <span style={{ position: "absolute", top: 7, left: 9, fontFamily: FONT.display, fontSize: span >= 2 ? 15 : 12, fontWeight: 700, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.8)", fontVariantNumeric: "tabular-nums" }}>{String(rank).padStart(2, "0")}</span>
+      <span style={{ position: "absolute", top: 6, left: 8, fontFamily: FONT.display, fontSize: big ? 14 : 11, fontWeight: 700, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.85)", fontVariantNumeric: "tabular-nums" }}>{String(rank).padStart(2, "0")}</span>
       <div style={scrim}>
-        <div style={{ fontSize: fs, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artist}</div>
-        <div style={{ fontSize: 11, color: "#cfcfcf", marginTop: 1 }}>{a.songs} songs</div>
+        <div style={{ fontSize: big ? 13 : 11, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artist}</div>
+        <div style={{ fontSize: 10, color: "#cfcfcf", marginTop: 1 }}>{a.songs} songs</div>
       </div>
     </div>
   );
 }
 
-function AlbumTile({ al, span }) {
+function AlbumTile({ al, side }) {
   const initial = ((al.album || "?").trim()[0] || "?").toUpperCase();
-  const big = span >= 2;
+  const big = side >= 110;
   return (
-    <div style={{ gridColumn: `span ${span}`, gridRow: `span ${span}`, position: "relative", borderRadius: 10, overflow: "hidden", background: C.card2, border: `1px solid ${C.border}` }}>
+    <div style={{ width: side, height: side, position: "relative", borderRadius: 10, overflow: "hidden", background: C.card2, border: `1px solid ${C.border}` }}>
       {al.cover ? (
         <img src={al.cover} alt={al.album} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (
-        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.display, fontSize: 40, fontWeight: 700, color: C.faint }}>{initial}</div>
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.display, fontSize: Math.round(side * 0.3), fontWeight: 700, color: C.faint }}>{initial}</div>
       )}
       {al.listen_session && (
         <div title={`Best run ${al.listen_session.run} tracks · ${al.listen_session.date}`} style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 20, background: "rgba(0,0,0,0.74)", border: `1px solid ${C.greenBd}` }}>
@@ -179,51 +174,61 @@ function AlbumTile({ al, span }) {
         </div>
       )}
       <div style={scrim}>
-        <div style={{ fontSize: big ? 14 : 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{al.album}</div>
-        {big && <div style={{ fontSize: 11, color: "#cfcfcf", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{al.artist}</div>}
+        <div style={{ fontSize: big ? 13 : 11, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{al.album}</div>
+        {big && <div style={{ fontSize: 10, color: "#cfcfcf", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{al.artist}</div>}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
           <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.22)", borderRadius: 2 }}>
             <div style={{ height: 3, borderRadius: 2, background: C.green, width: `${Math.round((al.completion ?? 0) * 100)}%` }} />
           </div>
-          <span style={{ fontSize: 10, color: "#cfcfcf", fontVariantNumeric: "tabular-nums" }}>{al.total_tracks ? `${al.owned}/${al.total_tracks}` : al.owned}</span>
+          <span style={{ fontSize: 9.5, color: "#cfcfcf", fontVariantNumeric: "tabular-nums" }}>{al.total_tracks ? `${al.owned}/${al.total_tracks}` : al.owned}</span>
         </div>
       </div>
     </div>
   );
 }
 
+const chartTab = (active) => ({
+  padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer",
+  fontSize: 13, fontWeight: 700, fontFamily: FONT.body,
+  background: active ? C.green : "transparent", color: active ? "#000" : C.sub,
+});
+
 function Charts({ artists, albums }) {
+  const [tab, setTab] = useState("artists");
   if (!artists || !albums) {
     return <div style={{ ...TYPE.body, padding: "40px 0" }}>Loading your charts…</div>;
   }
   const rest = artists.slice(3);
-  const maxRest = rest[0]?.songs || 1;
-  const maxOwned = albums[0]?.owned || 1;
   return (
-    <>
-      <Reveal>
-        <Department no="—" title="Top Artists" right={<span style={{ ...TYPE.micro, color: C.muted }}>by songs saved</span>} />
-        <Podium artists={artists} />
-        {rest.length > 0 && (
-          <div style={{ ...MOSAIC_GRID, marginTop: 28 }}>
-            {rest.map((a, i) => <ArtistTile key={a.artist} a={a} rank={i + 4} span={spanFor(a.songs, maxRest)} />)}
-          </div>
-        )}
-      </Reveal>
+    <Reveal>
+      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 28 }}>
+        <button onClick={() => setTab("artists")} style={chartTab(tab === "artists")}>Top Artists</button>
+        <button onClick={() => setTab("albums")} style={chartTab(tab === "albums")}>Top Albums</button>
+      </div>
 
-      <Reveal>
-        <div style={{ marginTop: 52 }}>
+      {tab === "artists" ? (
+        <>
+          <Department no="—" title="Top Artists" right={<span style={{ ...TYPE.micro, color: C.muted }}>sized by songs saved</span>} />
+          <Podium artists={artists} />
+          {rest.length > 0 && (
+            <div style={{ ...MOSAIC_WRAP, marginTop: 28 }}>
+              {sizeTiles(rest, (a) => a.songs).map(({ it, side }, i) => <ArtistTile key={it.artist} a={it} rank={i + 4} side={side} />)}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
           <Department no="—" title="Top Albums" right={<span style={{ ...TYPE.micro, color: C.muted }}>sized by songs saved · ▶ played in full</span>} />
           {albums.length === 0 ? (
             <EmptyState title="No albums yet" hint="Save more tracks to build your album charts." />
           ) : (
-            <div style={MOSAIC_GRID}>
-              {albums.map((al) => <AlbumTile key={`${al.album}-${al.artist}`} al={al} span={spanFor(al.owned, maxOwned)} />)}
+            <div style={MOSAIC_WRAP}>
+              {sizeTiles(albums, (al) => al.owned).map(({ it, side }) => <AlbumTile key={`${it.album}-${it.artist}`} al={it} side={side} />)}
             </div>
           )}
-        </div>
-      </Reveal>
-    </>
+        </>
+      )}
+    </Reveal>
   );
 }
 

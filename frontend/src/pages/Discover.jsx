@@ -564,7 +564,7 @@ function BlindSpotsView() {
 }
 
 /* ─────────────────────────── RABBIT HOLES (deeper) ─────────────────────────── */
-function DeeperFront({ h, rank, maxSaved, top, playing, play }) {
+function DeeperFront({ h, rank, maxSaved, top, loaded, playing, play }) {
   return (
     <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -585,7 +585,7 @@ function DeeperFront({ h, rank, maxSaved, top, playing, play }) {
       </div>
       {top
         ? <div onClick={(e) => e.stopPropagation()}><TrackRow track={top} playing={playing} onPlay={play} /></div>
-        : <div style={{ ...TYPE.body, fontSize: 12, padding: "8px 0" }}>Loading their tracks…</div>}
+        : <div style={{ ...TYPE.body, fontSize: 12, padding: "8px 0" }}>{loaded ? "No previewable track found." : "Loading their tracks…"}</div>}
       <div style={faceHint}>tap for more ⤿</div>
     </div>
   );
@@ -654,7 +654,7 @@ function DeeperView() {
             return (
               <FlipCard key={h.artist} height={300} flipped={!!flipped[h.artist]}
                 onFlip={() => { loadTracks(h.artist); setFlipped((f) => ({ ...f, [h.artist]: !f[h.artist] })); }}
-                front={<DeeperFront h={h} rank={page * pageSize + idx + 1} maxSaved={maxSaved} top={data?.[0]} playing={playing} play={play} />}
+                front={<DeeperFront h={h} rank={page * pageSize + idx + 1} maxSaved={maxSaved} top={data?.[0]} loaded={data !== undefined} playing={playing} play={play} />}
                 back={<DeeperBack h={h} rest={data?.slice(1, 4) || []} />}
               />
             );
@@ -715,6 +715,7 @@ function RecommendStudio() {
   const [query, setQuery] = useState("");
   const [sugs, setSugs] = useState([]);
   const [vibe, setVibe] = useState("");
+  const [vibeInput, setVibeInput] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [mixes, setMixes] = useState(null);
@@ -761,6 +762,12 @@ function RecommendStudio() {
     fetch(`${API}/discovery/recommend?${p}`).then((r) => r.json())
       .then((d) => { setResult(d); setLoading(false); }).catch(() => setLoading(false));
   }, [seeds, vibe, coords]);
+
+  // Debounce the free-text "describe it" box into the vibe used for recs.
+  useEffect(() => {
+    const id = setTimeout(() => setVibe(vibeInput.trim()), 500);
+    return () => clearTimeout(id);
+  }, [vibeInput]);
 
   // A single song seed also gets harmonic "mixes well with" picks (key + BPM).
   useEffect(() => {
@@ -816,9 +823,14 @@ function RecommendStudio() {
             )}
           </div>
         )}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14, alignItems: "center" }}>
+        <div style={{ marginTop: 14 }}>
+          <Input value={vibeInput} onChange={(e) => setVibeInput(e.target.value)}
+            placeholder="Describe it… e.g. rainy late-night bengali"
+            style={{ width: "100%", maxWidth: 340, fontSize: 12, padding: "8px 12px", minHeight: 36 }} />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
           {FORYOU_VIBES.map((v) => (
-            <Pill key={v.value} active={vibe === v.value} onClick={() => setVibe(vibe === v.value ? "" : v.value)} style={{ minHeight: 34, padding: "6px 12px" }}>{v.emoji} {v.label}</Pill>
+            <Pill key={v.value} active={vibeInput === v.value} onClick={() => setVibeInput(vibeInput === v.value ? "" : v.value)} style={{ minHeight: 34, padding: "6px 12px" }}>{v.emoji} {v.label}</Pill>
           ))}
           <Pill active={!!coords} onClick={toggleWeather} style={{ minHeight: 34, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <WeatherIcon size={14} color={coords ? "#000" : C.sub} /> Weather
