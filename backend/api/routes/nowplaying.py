@@ -197,6 +197,42 @@ def get_lyrics_meaning(track_name: str, artist: str):
         return {"found": False, "error": str(e)}
 
 
+@router.get("/synced-lyrics")
+def synced_lyrics(track: str, artist: str, duration: float = 0):
+    """Time-synced lyrics from LRCLIB (free, no auth). Parsed into [{t, text}] so the
+    Now Playing panel can scroll them line-by-line against the track's real position."""
+    import re
+    data = {}
+    headers = {"User-Agent": "Fidolio (personal music analytics)"}
+    try:
+        params = {"track_name": track, "artist_name": artist}
+        if duration:
+            params["duration"] = int(duration)
+        r = requests.get("https://lrclib.net/api/get", params=params, timeout=8, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+        else:
+            sr = requests.get("https://lrclib.net/api/search",
+                              params={"track_name": track, "artist_name": artist},
+                              timeout=8, headers=headers)
+            arr = sr.json() if sr.status_code == 200 else []
+            data = arr[0] if isinstance(arr, list) and arr else {}
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
+    synced = data.get("syncedLyrics") or ""
+    plain = data.get("plainLyrics") or ""
+    lines = []
+    for m in re.finditer(r"\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)", synced):
+        mn, sec, cs, text = m.groups()
+        frac = (int(cs) / (100 if len(cs) == 2 else 1000)) if cs else 0
+        t = int(mn) * 60 + int(sec) + frac
+        if text.strip():
+            lines.append({"t": round(t, 2), "text": text.strip()})
+    return {"found": bool(lines or plain), "synced": bool(lines),
+            "lines": lines, "plain": "" if lines else plain[:2000]}
+
+
 @router.get("/deezer-preview")
 def get_deezer_preview(track_name: str, artist: str):
     """Get a 30-second Deezer preview URL for any track."""

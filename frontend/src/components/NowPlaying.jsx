@@ -20,6 +20,10 @@ export default function NowPlaying({ variant = "bar" }) {
   const [lyrics, setLyrics] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [loadingLyrics, setLoadingLyrics] = useState(false);
+  const [lyricsView, setLyricsView] = useState(false);
+  const [lyricLines, setLyricLines] = useState(null);   // null=loading, []=none, [...]=synced
+  const [lyricIdx, setLyricIdx] = useState(0);
+  const [plainLyrics, setPlainLyrics] = useState("");
   const lastFetchTime = useRef(null);
   const trackRef = useRef(null);
   const { playing: previewId, current: preview, analyser, stop: stopPreview } = usePreviewContext();
@@ -48,6 +52,30 @@ export default function NowPlaying({ variant = "bar" }) {
     }, 1000);
     return () => clearInterval(tick);
   }, []);
+
+  // Fetch synced lyrics when the lyrics view opens (or the track changes).
+  useEffect(() => {
+    if (!lyricsView || !track) return;
+    setLyricLines(null); setPlainLyrics("");
+    fetch(`${API}/nowplaying/synced-lyrics?track=${encodeURIComponent(track.name)}&artist=${encodeURIComponent(track.artist)}&duration=${Math.round((track.duration_ms || 0) / 1000)}`)
+      .then((r) => r.json())
+      .then((d) => { setLyricLines(d.lines || []); setPlainLyrics(d.plain || ""); })
+      .catch(() => setLyricLines([]));
+  }, [lyricsView, track?.name]);
+
+  // Advance the active lyric line against the track's real position.
+  useEffect(() => {
+    if (!lyricsView || !lyricLines?.length) return;
+    const id = setInterval(() => {
+      const tr = trackRef.current;
+      if (!tr) return;
+      const sec = (tr.progress_ms + (Date.now() - (lastFetchTime.current || Date.now()))) / 1000;
+      let i = 0;
+      for (let k = 0; k < lyricLines.length; k++) { if (lyricLines[k].t <= sec) i = k; else break; }
+      setLyricIdx(i);
+    }, 250);
+    return () => clearInterval(id);
+  }, [lyricsView, lyricLines]);
 
   const fetchLyrics = async () => {
     if (!track) return;
@@ -140,6 +168,47 @@ export default function NowPlaying({ variant = "bar" }) {
     </div>
   );
 
+  // ── Synced lyrics view (panel) — story-style, lines advance with the song ──
+  if (variant === "panel" && lyricsView) {
+    return (
+      <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {track.album_art && (
+          <div className="kenburns" style={{ position: "absolute", inset: "-30%", backgroundImage: `url(${track.album_art})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(34px) brightness(0.4) saturate(1.3)", opacity: 0.5, zIndex: 0 }} />
+        )}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(8,8,8,0.72), rgba(8,8,8,0.96))", zIndex: 0 }} />
+        <div style={{ position: "relative", zIndex: 1, padding: 14, display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ ...KICKER, color: C.green }}>Lyrics</div>
+            <button onClick={() => setLyricsView(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 11, overflow: "hidden" }}>
+            {lyricLines === null ? (
+              <div style={{ ...TYPE.body, fontSize: 13 }}>Finding lyrics…</div>
+            ) : lyricLines.length ? (
+              [-1, 0, 1, 2, 3].map((off) => {
+                const line = lyricLines[lyricIdx + off];
+                if (!line) return null;
+                const cur = off === 0;
+                return (
+                  <div key={lyricIdx + off} style={{ fontFamily: FONT.display, fontSize: cur ? 17 : 13, fontWeight: cur ? 700 : 500, color: cur ? "#fff" : "rgba(255,255,255,0.38)", lineHeight: 1.3, transition: "all 0.3s ease" }}>
+                    {line.text}
+                  </div>
+                );
+              })
+            ) : plainLyrics ? (
+              <div style={{ fontSize: 12.5, color: "#bbb", lineHeight: 1.75, overflowY: "auto", whiteSpace: "pre-wrap" }}>{plainLyrics}</div>
+            ) : (
+              <div style={{ ...TYPE.body, fontSize: 13 }}>No lyrics found for this one.</div>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: "#cdcdcd", marginTop: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {lyricLines && !lyricLines.length && plainLyrics ? "Unsynced — full lyric" : `${track.name} · ${track.artist}`}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── PANEL: rich card embedded at the bottom of the spine sidebar ──
   if (variant === "panel") {
     return (
@@ -192,9 +261,12 @@ export default function NowPlaying({ variant = "bar" }) {
             <Waveform size={104} active={false} features={f} valence={f?.valence} seed={track.name} />
           </div>
 
-          <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-            <button onClick={fetchLyrics} style={{ flex: 1, padding: "8px 8px", borderRadius: 9, border: "none", background: lyricsOpen ? C.green : "rgba(255,255,255,0.09)", color: lyricsOpen ? "#000" : "#e6e6e6", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>What's this about?</button>
-            <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ padding: "8px 13px", borderRadius: 9, background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center" }}>↗</a>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
+            <button onClick={() => setLyricsView(true)} style={{ width: "100%", padding: "9px 8px", borderRadius: 9, border: `1px solid ${C.greenBd}`, background: C.greenBg, color: C.green, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>♫ Lyrics</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={fetchLyrics} style={{ flex: 1, padding: "8px 8px", borderRadius: 9, border: "none", background: lyricsOpen ? C.green : "rgba(255,255,255,0.09)", color: lyricsOpen ? "#000" : "#e6e6e6", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>What's this about?</button>
+              <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ padding: "8px 13px", borderRadius: 9, background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center" }}>↗</a>
+            </div>
           </div>
         </div>
         {popover}
