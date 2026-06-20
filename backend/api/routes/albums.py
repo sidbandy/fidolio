@@ -228,14 +228,23 @@ def get_blind_spots(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
             continue
 
     blind_spots = []
+    used = set()   # de-dupe songs across cards so genres sharing artists don't repeat
     for tag, count in tag_counts.items():
         ac = len(tag_artists[tag])
         if 1 <= ac <= 5 and count < 50:
+            songs = []
             try:
                 cur.execute("""SELECT name, artist FROM tracks
                                WHERE user_id = %s AND artist = ANY(%s)
-                               ORDER BY saved_at DESC LIMIT 3""", (user_id, tag_artists[tag]))
-                songs = [{"name": n, "artist": a} for n, a in cur.fetchall()]
+                               ORDER BY saved_at DESC LIMIT 20""", (user_id, tag_artists[tag]))
+                for n, a in cur.fetchall():
+                    key = (n or "").lower()
+                    if key in used:
+                        continue
+                    used.add(key)
+                    songs.append({"name": n, "artist": a})
+                    if len(songs) >= 3:
+                        break
             except Exception:
                 songs = []
             blind_spots.append({
@@ -297,8 +306,27 @@ def blind_spot_detail(
 
     ranked = sorted(((nm, sc) for nm, sc in recs.items() if nm.lower() not in owned),
                     key=lambda x: -x[1])
+    rec_artists = [nm for nm, _ in ranked[:5]]
+
+    # One representative track per top recommended artist (3 different artists) for
+    # the flip-card back — the first is the "play next" pick (previewable on the UI).
+    rec_tracks = []
+    if LASTFM_KEY:
+        for nm in rec_artists[:3]:
+            try:
+                r = requests.get("http://ws.audioscrobbler.com/2.0/", params={
+                    "method": "artist.getTopTracks", "artist": nm, "limit": 1,
+                    "api_key": LASTFM_KEY, "format": "json"}, timeout=5)
+                tt = r.json().get("toptracks", {}).get("track", [])
+                if isinstance(tt, dict):
+                    tt = [tt]
+                if tt and tt[0].get("name"):
+                    rec_tracks.append({"artist": nm, "track": tt[0]["name"]})
+            except Exception:
+                continue
+
     return {"genre": genre, "meaning": meaning,
-            "recommended_artists": [nm for nm, _ in ranked[:5]]}
+            "recommended_artists": rec_artists, "recommended_tracks": rec_tracks}
 
 
 @router.get("/artist-top-tracks")

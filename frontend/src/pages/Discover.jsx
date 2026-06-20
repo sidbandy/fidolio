@@ -466,14 +466,31 @@ function BlindFront({ spot, meaning, meaningOpen, onInfo }) {
   );
 }
 
-function BlindBack({ spot, det }) {
+function BlindBack({ spot, det, playing, play }) {
   const loading = !det || det.loading;
+  const tracks = det?.recommended_tracks || [];
+  const top = tracks[0];
+  const rest = tracks.slice(1, 3);
+  const topId = top ? `bs-${spot.genre}-${top.artist}` : null;
   return (
     <div style={{ height: "100%", background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ ...TYPE.micro, color: C.green, marginBottom: 4 }}>Go deeper into {spot.genre}</div>
-      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 14 }}>Niche artists you'd likely love — you don't own these yet:</div>
+      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 12 }}>Different artists you don't own — tap ▶ to taste the first.</div>
       {loading ? <div style={{ ...TYPE.body, fontSize: 12 }}>Finding artists…</div> :
-        det.recommended_artists?.length ? (
+        top ? (
+          <>
+            <div onClick={(e) => e.stopPropagation()} style={{ borderRadius: 10, border: `1px solid ${C.greenBd}`, background: "rgba(0,0,0,0.28)", boxShadow: "0 8px 22px rgba(29,185,84,0.18)", marginBottom: 12 }}>
+              <TrackRow track={{ id: topId, name: top.track, artist: top.artist }} playing={playing} onPlay={play} note="play next" />
+            </div>
+            {rest.map((t, i) => (
+              <a key={i} href={`https://open.spotify.com/search/${encodeURIComponent(t.artist + " " + t.track)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", padding: "6px 4px" }}>
+                <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.green, width: 16 }}>{i + 2}</span>
+                <span style={{ flex: 1, fontSize: 13, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.track} <span style={{ color: C.sub }}>· {t.artist}</span></span>
+                <span style={{ fontSize: 11, color: C.green }}>↗</span>
+              </a>
+            ))}
+          </>
+        ) : det.recommended_artists?.length ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {det.recommended_artists.map((a, i) => (
               <a key={a} href={`https://open.spotify.com/search/${encodeURIComponent(a)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
@@ -497,6 +514,7 @@ function BlindSpotsView() {
   const [meaningOpen, setMeaningOpen] = useState({});
   const [details, setDetails] = useState({});
   const requested = useRef(new Set());
+  const { playing, play } = usePreview();
 
   useEffect(() => {
     fetch(`${API}/albums/blind-spots`).then((r) => r.json()).then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
@@ -535,7 +553,7 @@ function BlindSpotsView() {
               <FlipCard key={spot.genre} height={300} flipped={!!flipped[spot.genre]}
                 onFlip={() => { loadDetail(spot); setFlipped((f) => ({ ...f, [spot.genre]: !f[spot.genre] })); }}
                 front={<BlindFront spot={spot} meaning={det && !det.loading ? det.meaning : undefined} meaningOpen={!!meaningOpen[spot.genre]} onInfo={() => { loadDetail(spot); setMeaningOpen((m) => ({ ...m, [spot.genre]: !m[spot.genre] })); }} />}
-                back={<BlindBack spot={spot} det={det} />}
+                back={<BlindBack spot={spot} det={det} playing={playing} play={play} />}
               />
             );
           })}
@@ -700,6 +718,16 @@ function RecommendStudio() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [mixes, setMixes] = useState(null);
+  const [coords, setCoords] = useState(null);
+
+  const toggleWeather = () => {
+    if (coords) { setCoords(null); return; }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCoords({ lat: pos.coords.latitude.toFixed(3), lon: pos.coords.longitude.toFixed(3) }),
+      () => {}
+    );
+  };
 
   useEffect(() => {
     if (!query.trim()) { setSugs([]); return; }
@@ -723,15 +751,16 @@ function RecommendStudio() {
   };
 
   useEffect(() => {
-    if (!seeds.length && !vibe) { setResult(null); return; }
+    if (!seeds.length && !vibe && !coords) { setResult(null); return; }
     setLoading(true);
     const p = new URLSearchParams();
     seeds.forEach((s) => p.append("seed", `${s.type}|${s.name}|${s.artist || ""}`));
     if (vibe) p.set("vibe", vibe);
+    if (coords) { p.set("lat", coords.lat); p.set("lon", coords.lon); }
     p.set("size", "10");
     fetch(`${API}/discovery/recommend?${p}`).then((r) => r.json())
       .then((d) => { setResult(d); setLoading(false); }).catch(() => setLoading(false));
-  }, [seeds, vibe]);
+  }, [seeds, vibe, coords]);
 
   // A single song seed also gets harmonic "mixes well with" picks (key + BPM).
   useEffect(() => {
@@ -787,11 +816,20 @@ function RecommendStudio() {
             )}
           </div>
         )}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14, alignItems: "center" }}>
           {FORYOU_VIBES.map((v) => (
             <Pill key={v.value} active={vibe === v.value} onClick={() => setVibe(vibe === v.value ? "" : v.value)} style={{ minHeight: 34, padding: "6px 12px" }}>{v.emoji} {v.label}</Pill>
           ))}
+          <Pill active={!!coords} onClick={toggleWeather} style={{ minHeight: 34, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <WeatherIcon size={14} color={coords ? "#000" : C.sub} /> Weather
+          </Pill>
         </div>
+        {result?.weather && (
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, background: "#151515", border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px" }}>
+            <WeatherIcon size={16} color={C.green} />
+            Tuned to your sky — <span style={{ color: "#fff" }}>{result.weather.explanation}</span>{result.weather.temperature != null ? ` · ${Math.round(result.weather.temperature)}°C` : ""}
+          </div>
+        )}
       </Card>
 
       {loading && <div style={{ ...TYPE.body }}>Finding matches…</div>}

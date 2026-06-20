@@ -409,6 +409,41 @@ def search_library(
     }
 
 
+def weather_profile(lat, lon):
+    """Current weather → audio-feature filters. Shared by /weather-vibe and the
+    recommendation engine so weather works as a filter alongside everything else."""
+    try:
+        resp = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={"latitude": lat, "longitude": lon,
+                    "current_weather": "true", "temperature_unit": "celsius"},
+            timeout=8)
+        cw = resp.json()["current_weather"]
+        code = int(cw["weathercode"]); temp = float(cw["temperature"])
+    except Exception as e:
+        return {"error": f"Weather fetch failed: {e}"}
+
+    if code >= 95:
+        wf = {"max_valence": 0.35, "min_energy": 0.6}; explanation = "thunderstorm → dark and intense"
+    elif code in range(61, 68) or code in range(80, 83):
+        wf = {"max_valence": 0.4, "max_energy": 0.5}; explanation = "rainy → melancholy and mellow"
+    elif code in range(51, 58):
+        wf = {"max_valence": 0.5, "max_energy": 0.45, "min_acousticness": 0.3}; explanation = "drizzling → soft and reflective"
+    elif code in range(71, 78) or code in range(85, 87):
+        wf = {"max_energy": 0.4, "min_acousticness": 0.4}; explanation = "snowing → calm and cozy"
+    elif code in (45, 48):
+        wf = {"max_energy": 0.35, "max_valence": 0.5}; explanation = "foggy → dreamy and slow"
+    elif code == 0 and temp > 25:
+        wf = {"min_valence": 0.6, "min_energy": 0.6}; explanation = "clear and hot → upbeat and energetic"
+    elif code in (0, 1) and temp > 15:
+        wf = {"min_valence": 0.55}; explanation = "clear and pleasant → good vibes"
+    elif code in (0, 1) and temp <= 10:
+        wf = {"max_valence": 0.55, "min_acousticness": 0.3}; explanation = "clear and cold → crisp and introspective"
+    else:
+        wf = {"max_energy": 0.6}; explanation = "cloudy → neutral and mellow"
+    return {"code": code, "temperature": temp, "explanation": explanation, "filters": wf}
+
+
 @router.get("/weather-vibe")
 def get_weather_vibe(
     lat:     float = Query(...),
@@ -416,47 +451,10 @@ def get_weather_vibe(
     user_id: str   = Query("0tz6fep2m5bx1vq85g48518u9"),
     limit:   int   = Query(20),
 ):
-    try:
-        resp = requests.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={"latitude": lat, "longitude": lon,
-                    "current_weather": "true", "temperature_unit": "celsius"},
-            timeout=8
-        )
-        cw   = resp.json()["current_weather"]
-        code = int(cw["weathercode"])
-        temp = float(cw["temperature"])
-    except Exception as e:
-        return {"error": f"Weather fetch failed: {e}"}
-
-    # Map weather to audio features
-    if code >= 95:
-        wf = {"max_valence":0.35,"min_energy":0.6}
-        explanation = "thunderstorm → dark and intense"
-    elif code in range(61,68) or code in range(80,83):
-        wf = {"max_valence":0.4,"max_energy":0.5}
-        explanation = "rainy → melancholy and mellow"
-    elif code in range(51,58):
-        wf = {"max_valence":0.5,"max_energy":0.45,"min_acousticness":0.3}
-        explanation = "drizzling → soft and reflective"
-    elif code in range(71,78) or code in range(85,87):
-        wf = {"max_energy":0.4,"min_acousticness":0.4}
-        explanation = "snowing → calm and cozy"
-    elif code in (45,48):
-        wf = {"max_energy":0.35,"max_valence":0.5}
-        explanation = "foggy → dreamy and slow"
-    elif code == 0 and temp > 25:
-        wf = {"min_valence":0.6,"min_energy":0.6}
-        explanation = "clear and hot → upbeat and energetic"
-    elif code in (0,1) and temp > 15:
-        wf = {"min_valence":0.55}
-        explanation = "clear and pleasant → good vibes"
-    elif code in (0,1) and temp <= 10:
-        wf = {"max_valence":0.55,"min_acousticness":0.3}
-        explanation = "clear and cold → crisp and introspective"
-    else:
-        wf = {"max_energy":0.6}
-        explanation = "cloudy → neutral and mellow"
+    wp = weather_profile(lat, lon)
+    if "error" in wp:
+        return {"error": wp["error"]}
+    code, temp, explanation, wf = wp["code"], wp["temperature"], wp["explanation"], wp["filters"]
 
     conn = get_conn()
     cur  = conn.cursor()

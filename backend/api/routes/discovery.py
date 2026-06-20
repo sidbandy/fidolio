@@ -677,9 +677,10 @@ def recommend(
     min_tempo: Optional[float] = Query(None), max_tempo: Optional[float] = Query(None),
     min_energy: Optional[float] = Query(None), max_energy: Optional[float] = Query(None),
     min_valence: Optional[float] = Query(None), max_valence: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None), lon: Optional[float] = Query(None),
     size: int = Query(10, le=20),
 ):
-    sig = f"{user_id}|{sorted(seed or [])}|{vibe}|{artists}|{language}|{min_tempo}|{max_tempo}|{min_energy}|{max_energy}|{min_valence}|{max_valence}|{size}"
+    sig = f"{user_id}|{sorted(seed or [])}|{vibe}|{artists}|{language}|{min_tempo}|{max_tempo}|{min_energy}|{max_energy}|{min_valence}|{max_valence}|{lat}|{lon}|{size}"
     hit = _REC_CACHE.get(sig)
     if hit and (_time.time() - hit[0] < _REC_TTL):
         return {**hit[1], "cached": True}
@@ -719,6 +720,20 @@ def recommend(
     if min_valence is not None: target["valence"] = max(target.get("valence", 0.5), min_valence)
     if max_valence is not None: target["valence"] = min(target.get("valence", 0.5), max_valence)
 
+    # Weather as a filter — nudges the target toward the current sky.
+    weather = None
+    if lat is not None and lon is not None:
+        from api.routes.search import weather_profile
+        wp = weather_profile(lat, lon)
+        if "error" not in wp:
+            weather = {"explanation": wp["explanation"], "temperature": wp["temperature"]}
+            wf = wp["filters"]
+            if "min_energy" in wf:       target["energy"] = max(target.get("energy", 0.5), wf["min_energy"])
+            if "max_energy" in wf:       target["energy"] = min(target.get("energy", 0.5), wf["max_energy"])
+            if "min_valence" in wf:      target["valence"] = max(target.get("valence", 0.5), wf["min_valence"])
+            if "max_valence" in wf:      target["valence"] = min(target.get("valence", 0.5), wf["max_valence"])
+            if "min_acousticness" in wf: target["acousticness"] = max(target.get("acousticness", 0.3), wf["min_acousticness"])
+
     if not seed_ids:
         seed_ids = get_seeds_from_library(cur, user_id,
                                           [a.strip() for a in artists.split(",")] if artists else None)
@@ -735,6 +750,7 @@ def recommend(
         "seeds": [{"type": c["type"], "label": c["label"], "artist": c.get("artist"),
                    "resolved": c["features"] is not None} for c in seeds_ctx],
         "target_features": {k: round(target.get(k, 0), 3) for k in similarity.FEATURES},
+        "weather": weather,
         "songs": {"owned": owned_songs, "unowned": unowned_songs},
         "albums": {"owned": owned_albums_out, "unowned": unowned_albums},
     }
