@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { C, FONT, moodColor, SIDEBAR } from "../theme";
+import { C, FONT, TYPE, moodColor, SIDEBAR } from "../theme";
 import Waveform from "./Waveform";
 import { usePreviewContext } from "../context/PreviewProvider";
 
