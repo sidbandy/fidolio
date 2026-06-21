@@ -82,7 +82,7 @@ export default function NowPlaying({ variant = "bar" }) {
   useEffect(() => {
     if (!mixesView || !track) return;
     setMixes(null);
-    fetch(`${API}/discovery/mixes-with?track=${encodeURIComponent(track.name)}&size=6`)
+    fetch(`${API}/discovery/play-next?track=${encodeURIComponent(track.name)}&size=8`)
       .then((r) => r.json()).then((d) => setMixes(d.tracks || [])).catch(() => setMixes([]));
   }, [mixesView, track?.name]);
 
@@ -194,8 +194,10 @@ export default function NowPlaying({ variant = "bar" }) {
                     <button onClick={() => play(t.id, t.name, t.artist)} aria-label="Preview"
                       style={{ width: 30, height: 30, borderRadius: "50%", border: "none", flexShrink: 0, cursor: "pointer", fontSize: 10, background: isP ? C.green : "#1a1a1a", color: isP ? "#000" : C.sub }}>{isP ? "■" : "▶"}</button>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
-                      <div style={{ fontSize: 10.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.artist} · {t.relation}{t.tempo ? ` · ${Math.round(t.tempo)} BPM` : ""}</div>
+                      <div style={{ fontSize: 12.5, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.name}{!t.owned && <span style={{ fontSize: 8.5, fontWeight: 700, color: C.green, border: `1px solid ${C.greenBd}`, borderRadius: 4, padding: "0 4px", marginLeft: 6, verticalAlign: "middle" }}>NEW</span>}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.artist} · {t.relation}</div>
                     </div>
                     <a href={t.spotify_url} target="_blank" rel="noreferrer" title="Open in Spotify" style={{ color: C.green, fontSize: 13, textDecoration: "none", flexShrink: 0 }}>↗</a>
                   </div>

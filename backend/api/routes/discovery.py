@@ -807,7 +807,13 @@ _CAMELOT_MAJOR = [8, 3, 10, 5, 12, 7, 2, 9, 4, 11, 6, 1]   # B side
 _CAMELOT_MINOR = [5, 12, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10]   # A side
 
 def _camelot(key, mode):
-    if key is None or key < 0 or key > 11:
+    if key is None:
+        return None
+    try:
+        key = int(key)
+    except (TypeError, ValueError):
+        return None
+    if key < 0 or key > 11:
         return None
     n = (_CAMELOT_MAJOR if mode == 1 else _CAMELOT_MINOR)[key]
     return (n, "B" if mode == 1 else "A")
@@ -857,3 +863,113 @@ def mixes_with(track: str, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"), si
     cam = f"{scam[0]}{scam[1]}" if scam else None
     return {"seed": {"name": sname, "artist": sartist, "tempo": round(float(stempo), 1), "camelot": cam},
             "tracks": out[:size]}
+
+
+def _feat_row(row, start):
+    return _feats(*[float(x) if x is not None else None for x in row[start:start + 5]])
+
+@router.get("/play-next")
+def play_next(track: str = Query(...), user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"), size: int = Query(8, le=15)):
+    """Context-aware 'what to play next': blends the current track + the last 10 minutes
+    of listening (audio features, language, mood) with harmonic-key compatibility to rank
+    the best owned tracks AND fresh ReccoBeats picks. Every suggestion is meant to segue."""
+    from collections import Counter
+    conn = get_conn(); cur = conn.cursor()
+    stats = similarity.library_feature_stats(cur, user_id)
+
+    # ── the current track ──
+    cur.execute(f"""SELECT id, artist, {FEAT_COLS}, track_key, mode, language, instrumentalness
+                    FROM tracks WHERE user_id=%s AND LOWER(name) LIKE %s
+                    ORDER BY saved_at DESC LIMIT 1""", (user_id, f"%{track.lower()}%"))
+    c = cur.fetchone()
+    cur_id = c[0] if c else None
+    cur_feat = _feat_row(c, 2) if c else dict(similarity.DEFAULTS)
+    cur_key, cur_mode = (c[7], c[8]) if c else (None, None)
+    cur_inst = c[10] if c else None
+    cur_lang = c[9] if c else None
+    cur_moods = set(compute_moods(cur_feat["valence"], cur_feat["energy"], cur_feat["tempo"],
+                                  cur_feat["acousticness"], cur_feat["danceability"], cur_inst)) if c else set()
+
+    # ── last 10 minutes of listening ──
+    cur.execute(f"""SELECT t.id, {", ".join("t." + x.strip() for x in FEAT_COLS.split(","))}, t.language, t.instrumentalness
+                    FROM listening_history lh JOIN tracks t ON t.id = lh.track_id
+                    WHERE lh.user_id=%s AND lh.played_at >= NOW() - INTERVAL '10 minutes' AND t.energy IS NOT NULL""",
+                (user_id,))
+    recent = cur.fetchall()
+    recent_ids = [r[0] for r in recent]
+    recent_feats = [_feat_row(r, 1) for r in recent]
+    recent_avg = similarity.merge_features(recent_feats) if recent_feats else None
+    recent_moods = set()
+    for r in recent:
+        rf = _feat_row(r, 1)
+        recent_moods |= set(compute_moods(rf["valence"], rf["energy"], rf["tempo"], rf["acousticness"], rf["danceability"], r[7]))
+
+    # blended target — current track leads, recent context refines
+    def wavg(pairs):
+        out = {}
+        for f in similarity.FEATURES:
+            vals = [(d[f], w) for d, w in pairs if d and d.get(f) is not None]
+            out[f] = (sum(v * w for v, w in vals) / sum(w for _v, w in vals)) if vals else similarity.DEFAULTS[f]
+        return out
+    target = wavg([(cur_feat, 6.0), (recent_avg, 4.0)])
+    tv = similarity.to_vector(target, stats)
+    target_moods = cur_moods | recent_moods
+
+    # dominant language across current + recent → constrain only if it clearly leads
+    langs = ([cur_lang] if cur_lang else []) + [r[6] for r in recent if r[6]]
+    lang_target = None
+    if langs:
+        top_lang, cnt = Counter(langs).most_common(1)[0]
+        if cnt / len(langs) >= 0.6:
+            lang_target = top_lang
+
+    exclude = {x for x in ([cur_id] + recent_ids) if x}
+    cam_seed = _camelot(cur_key, cur_mode)
+
+    # ── owned candidates: SQL pre-filter to a tempo/valence neighbourhood, score in Python ──
+    e, v, t = target["energy"], target["valence"], target["tempo"]
+    clauses = ["user_id=%s", "energy IS NOT NULL"]
+    params = [user_id]
+    if lang_target:
+        clauses.append("LOWER(language)=%s"); params.append(lang_target.lower())
+    clauses += ["tempo BETWEEN %s AND %s", "valence BETWEEN %s AND %s"]
+    params += [t * 0.78, t * 1.22, max(0, v - 0.3), min(1, v + 0.3)]
+    cur.execute(f"""SELECT id,name,artist,{FEAT_COLS},track_key,mode,instrumentalness
+                    FROM tracks WHERE {' AND '.join(clauses)}
+                    ORDER BY ABS(tempo-%s) + ABS(valence-%s)*80 ASC LIMIT 140""", params + [t, v])
+    owned = []
+    for r in cur.fetchall():
+        if r[0] in exclude:
+            continue
+        feat = _feat_row(r, 3)
+        rel = _relation(cam_seed, _camelot(r[8], r[9]))
+        cm = set(compute_moods(feat["valence"], feat["energy"], feat["tempo"], feat["acousticness"], feat["danceability"], r[10]))
+        harmonic = 0.18 if (rel and rel[0] == 0) else (0.1 if rel else 0.0)
+        moodbonus = 0.13 if (cm & target_moods) else 0.0
+        sc = similarity.score(tv, similarity.to_vector(feat, stats)) + harmonic + moodbonus
+        label = ("in key" if (rel and rel[0] == 0) else "same mood" if moodbonus else ("matches your run" if lang_target else "fits the flow"))
+        owned.append((sc, {"id": r[0], "name": r[1], "artist": r[2], "relation": label,
+                           "owned": True, "spotify_url": f"https://open.spotify.com/track/{r[0]}"}))
+    owned.sort(key=lambda x: x[0], reverse=True)
+
+    cur.execute("SELECT id FROM tracks WHERE user_id=%s", (user_id,))
+    library_ids = {r[0] for r in cur.fetchall()}
+    cur.close(); conn.close()
+
+    # ── fresh, unowned picks via ReccoBeats, seeded by the current + recent run ──
+    seeds = [s for s in ([cur_id] + recent_ids) if s][:5]
+    rb = call_reccobeats(seeds, target, size)
+    lang_filter = "en" if (lang_target in (None, "english")) else "any"
+    rb_fmt = format_rb_tracks(rb, library_ids, 4, lang_filter)
+    unowned = [{"id": x.get("spotify_id") or f"u{i}", "name": x["name"], "artist": x["artist"],
+                "relation": "new · fits the flow", "owned": False, "spotify_url": x.get("spotify_url")}
+               for i, x in enumerate(rb_fmt) if not x.get("already_saved")][:3]
+
+    tracks = [o[1] for o in owned[:max(3, size - len(unowned))]] + unowned
+    return {
+        "seed": {"name": track, "language": cur_lang, "moods": sorted(cur_moods),
+                 "tempo": round(target["tempo"], 1)},
+        "recent_count": len(recent_ids),
+        "language_locked": lang_target,
+        "tracks": tracks[:size],
+    }
