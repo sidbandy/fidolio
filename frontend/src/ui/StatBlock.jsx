@@ -14,8 +14,8 @@ export default function StatBlock({
 }) {
   const numeric = typeof value === "number" && isFinite(value);
   return (
-    <div style={{ borderTop: `1px solid ${C.border2}`, paddingTop: 14 }}>
-      <div style={{ ...TYPE.stat, color: accent, overflow: "hidden", textOverflow: "ellipsis", ...valueStyle }}>
+    <div style={{ borderTop: `1px solid ${C.border2}`, paddingTop: 14, minWidth: 0 }}>
+      <div style={{ ...TYPE.stat, color: accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...valueStyle }}>
         {numeric && animate ? (
           <CountUp value={value} format={format} />
         ) : (

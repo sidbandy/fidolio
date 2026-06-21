@@ -387,7 +387,7 @@ export default function Identity() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "20px 40px" }}>
             <StatBlock value={Math.round(averages.tempo)} label="Avg BPM" format={(n) => Math.round(n)} />
             <StatBlock value={groove} label="Groove" format={pct} />
-            <StatBlock value={signature_mood || "—"} label="Signature Mood" accent={accent} valueStyle={{ fontSize: "clamp(26px, 3.4vw, 38px)" }} />
+            <StatBlock value={signature_mood || "—"} label="Signature Mood" accent={accent} valueStyle={{ fontSize: "clamp(18px, 2.2vw, 30px)" }} />
             <StatBlock value={peak_year ? String(peak_year) : "—"} label="Peak Year" />
             <StatBlock value={artist_count || 0} label="Artists" format={(n) => Math.round(n).toLocaleString()} />
           </div>
@@ -400,24 +400,6 @@ export default function Identity() {
         <Reveal>
           <Department no="—" title="Fingerprint" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 20, marginBottom: 40 }}>
-            <Card>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ ...TYPE.micro }}>Audio Profile</div>
-                <InfoTip title="Audio Profile">{audioReading(averages)}</InfoTip>
-              </div>
-              <ResponsiveContainer width="100%" height={230}>
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke={C.border2} />
-                  <PolarAngleAxis dataKey="feature" tick={{ ...axisTick, fill: C.sub }} />
-                  <Radar dataKey="value" stroke={C.green} fill={C.green} fillOpacity={0.2} strokeWidth={2} />
-                </RadarChart>
-              </ResponsiveContainer>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 8 }}>
-                {[["Tempo", `${Math.round(averages.tempo)} BPM`], ["Vocal", pct((1 - averages.instrumentalness) * 100)], ["Speech", pct(averages.speechiness * 100)], ["Acoustic", pct(averages.acousticness * 100)]].map(([l, v]) => (
-                  <span key={l} style={{ fontSize: 11, color: C.sub }}><span style={{ color: C.muted }}>{l}</span> <b style={{ color: "#fff" }}>{v}</b></span>
-                ))}
-              </div>
-            </Card>
             {(() => {
               const moodParts = [
                 { name: "dark", value: mood_distribution.dark, color: C.indigo },
@@ -434,44 +416,67 @@ export default function Identity() {
                 name: `${d.decade}s`, value: d.count, color: LANG_COLORS[i % LANG_COLORS.length],
               }));
               const mTop = topPart(moodParts), eTop = topPart(energyParts), dTop = topPart(decadeParts);
+              const hdr = { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 };
               return (<>
-                <Card>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                {/* Audio Profile — radar grows to fill the card */}
+                <Card style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={hdr}>
+                    <div style={{ ...TYPE.micro }}>Audio Profile</div>
+                    <InfoTip title="Audio Profile">{audioReading(averages)}</InfoTip>
+                  </div>
+                  <div style={{ flex: 1, minHeight: 280, display: "flex" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart data={radarData} outerRadius="72%">
+                        <PolarGrid stroke={C.border2} />
+                        <PolarAngleAxis dataKey="feature" tick={{ ...axisTick, fill: C.sub }} />
+                        <Radar dataKey="value" stroke={C.green} fill={C.green} fillOpacity={0.2} strokeWidth={2} />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                {/* Distributions — mood · energy · language donuts */}
+                <Card style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={hdr}>
                     <div style={{ ...TYPE.micro }}>Distributions</div>
                     <InfoTip title="Mood · Energy · Language">{moodReading(mood_distribution)} {energyReading(energy_distribution)} {langReading(languages)}</InfoTip>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 18, justifyItems: "center" }}>
-                    <div>
-                      <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Mood</div>
-                      <Donut parts={moodParts} centerTop={mTop.name} centerSub={`${mTop.pct}%`} />
-                    </div>
-                    <div>
-                      <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Energy</div>
-                      <Donut parts={energyParts} centerTop={eTop.name} centerSub={`${eTop.pct}%`} />
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-evenly", gap: 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, justifyItems: "center" }}>
+                      <div>
+                        <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Mood</div>
+                        <Donut parts={moodParts} centerTop={mTop.name} centerSub={`${mTop.pct}%`} size={124} />
+                      </div>
+                      <div>
+                        <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Energy</div>
+                        <Donut parts={energyParts} centerTop={eTop.name} centerSub={`${eTop.pct}%`} size={124} />
+                      </div>
                     </div>
                     <div>
                       <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Language</div>
                       {languages
-                        ? <Donut parts={langParts} centerTop={langParts.length} centerSub="languages" />
-                        : <div style={{ ...TYPE.body, fontSize: 12 }}>Loading…</div>}
+                        ? <Donut parts={langParts} centerTop={langParts.length} centerSub="languages" size={124} />
+                        : <div style={{ ...TYPE.body, fontSize: 12, textAlign: "center" }}>Loading…</div>}
                     </div>
                   </div>
                 </Card>
-                <Card>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+
+                {/* Eras — decade donut, centered */}
+                <Card style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={hdr}>
                     <div style={{ ...TYPE.micro }}>Eras</div>
                     <InfoTip title="Eras">The release-year span of your library by decade. Your center of gravity is the {dTop.name} ({dTop.pct}% of saves) — where your taste lives.</InfoTip>
                   </div>
-                  {decadeParts.length
-                    ? (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <Donut parts={decadeParts} centerTop={dTop.name} centerSub={`${dTop.pct}%`} size={150} />
-                        <div style={{ ...TYPE.body, fontSize: 12, textAlign: "center", marginTop: 14 }}>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}>
+                    {decadeParts.length
+                      ? (<>
+                        <Donut parts={decadeParts} centerTop={dTop.name} centerSub={`${dTop.pct}%`} size={184} />
+                        <div style={{ ...TYPE.body, fontSize: 13, textAlign: "center" }}>
                           Your taste lives in the <span style={{ color: "#fff" }}>{dTop.name}</span>.
                         </div>
-                      </div>
-                    )
-                    : <div style={{ ...TYPE.body, fontSize: 12 }}>Not enough release-year data yet.</div>}
+                      </>)
+                      : <div style={{ ...TYPE.body, fontSize: 12 }}>Not enough release-year data yet.</div>}
+                  </div>
                 </Card>
               </>);
             })()}

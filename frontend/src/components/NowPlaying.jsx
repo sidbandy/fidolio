@@ -25,7 +25,9 @@ export default function NowPlaying({ variant = "bar" }) {
   const [plainLyrics, setPlainLyrics] = useState("");
   const lastFetchTime = useRef(null);
   const trackRef = useRef(null);
-  const { playing: previewId, current: preview, stop: stopPreview } = usePreviewContext();
+  const { playing: previewId, current: preview, play, stop: stopPreview } = usePreviewContext();
+  const [mixesView, setMixesView] = useState(false);
+  const [mixes, setMixes] = useState(null);
 
   useEffect(() => {
     const poll = async () => {
@@ -75,6 +77,14 @@ export default function NowPlaying({ variant = "bar" }) {
     }, 250);
     return () => clearInterval(id);
   }, [lyricsView, lyricLines]);
+
+  // "Play next" — harmonic (Camelot + BPM) suggestions that segue from the current track.
+  useEffect(() => {
+    if (!mixesView || !track) return;
+    setMixes(null);
+    fetch(`${API}/discovery/mixes-with?track=${encodeURIComponent(track.name)}&size=6`)
+      .then((r) => r.json()).then((d) => setMixes(d.tracks || [])).catch(() => setMixes([]));
+  }, [mixesView, track?.name]);
 
   const fetchLyrics = async () => {
     if (!track) return;
@@ -160,6 +170,42 @@ export default function NowPlaying({ variant = "bar" }) {
       {!loadingLyrics && !lyrics?.found && <p style={{ fontSize: 13, color: C.label }}>{lyrics?.message || "Not found on Genius."}</p>}
     </div>
   );
+
+  // ── "Play next" view (panel) — harmonic + close-BPM segues from this track ──
+  if (variant === "panel" && mixesView) {
+    return (
+      <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {track.album_art && (
+          <div className="kenburns" style={{ position: "absolute", inset: "-30%", backgroundImage: `url(${track.album_art})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(34px) brightness(0.4) saturate(1.3)", opacity: 0.45, zIndex: 0 }} />
+        )}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(8,8,8,0.74), rgba(8,8,8,0.96))", zIndex: 0 }} />
+        <div style={{ position: "relative", zIndex: 1, padding: 14, display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ ...KICKER, color: C.green }}>Plays next</div>
+            <button onClick={() => setMixesView(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 12 }}>Smooth, in-key segues from <span style={{ color: "#fff" }}>{track.name}</span> — preview or open, your call.</div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 9 }}>
+            {mixes === null ? <div style={{ ...TYPE.body, fontSize: 12 }}>Finding smooth transitions…</div>
+              : mixes.length ? mixes.map((t) => {
+                const isP = previewId === t.id;
+                return (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <button onClick={() => play(t.id, t.name, t.artist)} aria-label="Preview"
+                      style={{ width: 30, height: 30, borderRadius: "50%", border: "none", flexShrink: 0, cursor: "pointer", fontSize: 10, background: isP ? C.green : "#1a1a1a", color: isP ? "#000" : C.sub }}>{isP ? "■" : "▶"}</button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
+                      <div style={{ fontSize: 10.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.artist} · {t.relation}{t.tempo ? ` · ${Math.round(t.tempo)} BPM` : ""}</div>
+                    </div>
+                    <a href={t.spotify_url} target="_blank" rel="noreferrer" title="Open in Spotify" style={{ color: C.green, fontSize: 13, textDecoration: "none", flexShrink: 0 }}>↗</a>
+                  </div>
+                );
+              }) : <div style={{ ...TYPE.body, fontSize: 12 }}>No in-key matches in your library for this one.</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Synced lyrics view (panel) — story-style, lines advance with the song ──
   if (variant === "panel" && lyricsView) {
@@ -251,7 +297,10 @@ export default function NowPlaying({ variant = "bar" }) {
 
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
-            <button onClick={() => setLyricsView(true)} style={{ width: "100%", padding: "9px 8px", borderRadius: 9, border: `1px solid ${C.greenBd}`, background: C.greenBg, color: C.green, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>♫ Lyrics</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setLyricsView(true)} style={{ flex: 1, padding: "9px 8px", borderRadius: 9, border: `1px solid ${C.greenBd}`, background: C.greenBg, color: C.green, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>♫ Lyrics</button>
+              <button onClick={() => setMixesView(true)} style={{ flex: 1, padding: "9px 8px", borderRadius: 9, border: `1px solid ${C.border2}`, background: "rgba(255,255,255,0.06)", color: "#e6e6e6", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⇆ Play next</button>
+            </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={fetchLyrics} style={{ flex: 1, padding: "8px 8px", borderRadius: 9, border: "none", background: lyricsOpen ? C.green : "rgba(255,255,255,0.09)", color: lyricsOpen ? "#000" : "#e6e6e6", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>What's this about?</button>
               <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ padding: "8px 13px", borderRadius: 9, background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center" }}>↗</a>
