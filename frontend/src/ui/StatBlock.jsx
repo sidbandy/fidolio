@@ -10,11 +10,12 @@ export default function StatBlock({
   sub,
   animate = true,
   format,
+  valueStyle,
 }) {
   const numeric = typeof value === "number" && isFinite(value);
   return (
     <div style={{ borderTop: `1px solid ${C.border2}`, paddingTop: 14 }}>
-      <div style={{ ...TYPE.stat, color: accent }}>
+      <div style={{ ...TYPE.stat, color: accent, overflow: "hidden", textOverflow: "ellipsis", ...valueStyle }}>
         {numeric && animate ? (
           <CountUp value={value} format={format} />
         ) : (

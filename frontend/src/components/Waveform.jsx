@@ -41,8 +41,8 @@ export default function Waveform({
     const tempo = f.tempo || 110;
     const color = colorProp || (valence != null ? moodColor(valence) : C.green);
     const cx = size / 2, cy = size / 2;
-    const baseR = size * 0.23;          // resting radius (room to pulse + spike)
-    const maxAmp = size * 0.24;         // spike height
+    const baseR = size * 0.20;          // resting radius (room to pulse + spike)
+    const maxAmp = size * 0.27;         // spike height
     const lineW = Math.max(1.4, size * 0.045);
 
     let POINTS = Math.max(72, Math.floor(size * 1.7));
@@ -71,21 +71,22 @@ export default function Waveform({
         for (let i = 0; i <= HALF; i++) {
           const bin = Math.floor(Math.pow(i / HALF, 1.5) * (freq.length * 0.62));
           const v = freq[Math.min(bin, freq.length - 1)] / 255;
-          half[i] = Math.pow(v, 0.72) * (0.9 + energy * 0.6);   // emphasized peaks
+          // floor the quiet bins to 0 (deep troughs) and amplify loud bins (high crests)
+          half[i] = Math.max(0, v - 0.08) * (1.5 + energy * 0.6);
         }
       } else {
         for (let i = 0; i <= HALF; i++) {
           half[i] = idle[i] * (0.45 + energy * 0.55) * (0.75 + 0.25 * Math.sin(t * 1.1 + i * 0.5));
         }
       }
-      bassRef.current += (bass - bassRef.current) * 0.3;        // snappy beat
-      const pulse = active ? bassRef.current * 0.6 : 0.06 + 0.05 * Math.sin(t * 1.3);
+      bassRef.current += (bass - bassRef.current) * 0.5;        // snappy beat
+      const pulse = active ? bassRef.current * 0.75 : 0.06 + 0.05 * Math.sin(t * 1.3);
       const effBase = baseR * (1 + pulse);
 
-      // ease each (mirrored) point toward its target — fast enough to feel live
+      // ease each (mirrored) point toward its target — snappy so it jerks with the sound
       for (let p = 0; p < POINTS; p++) {
         const target = half[p <= HALF ? p : POINTS - p];
-        sm[p] += (target - sm[p]) * (active ? 0.4 : 0.12);
+        sm[p] += (target - sm[p]) * (active ? 0.6 : 0.12);
       }
 
       const rot = t * (active ? 0.2 + tempo / 700 : 0.1);

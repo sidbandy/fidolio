@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { C, FONT, moodColor, moodKey } from "../theme";
-import Waveform from "../components/Waveform";
-import { usePreviewContext } from "../context/PreviewProvider";
 
 export function Badge({ children, color = C.muted }) {
   return (
@@ -57,7 +55,6 @@ function MoodBadge({ mood, track, color }) {
 export default function TrackRow({ track, playing, onPlay, rank, note }) {
   const isPlaying = playing === track.id;
   const mc = moodColor(track.valence);
-  const { analyser } = usePreviewContext();
 
   return (
     <div
@@ -93,36 +90,22 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         onClick={() => onPlay(track.id, track.name, track.artist)}
         aria-label={isPlaying ? "Stop preview" : "Play preview"}
         style={{
-          position: "relative",
-          width: 44,
-          height: 44,
+          width: 38,
+          height: 38,
           borderRadius: "50%",
-          border: `1px solid ${isPlaying ? mc : C.border}`,
+          border: "none",
           cursor: "pointer",
           flexShrink: 0,
-          padding: 0,
+          fontSize: 11,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: isPlaying ? "rgba(29,185,84,0.07)" : "#101010",
-          boxShadow: isPlaying ? `0 0 14px ${mc}44` : "none",
-          transition: "box-shadow 0.2s, border-color 0.2s",
+          background: isPlaying ? C.green : "#1a1a1a",
+          color: isPlaying ? "#000" : C.muted,
+          transition: "all 0.15s",
         }}
       >
-        {isPlaying && (
-          <Waveform size={40} active analyser={analyser} features={track} valence={track.valence} seed={track.id || track.name || "x"} />
-        )}
-        <span
-          style={{
-            position: "absolute",
-            fontSize: 10,
-            color: isPlaying ? "#fff" : C.sub,
-            textShadow: "0 1px 3px rgba(0,0,0,0.7)",
-            pointerEvents: "none",
-          }}
-        >
-          {isPlaying ? "■" : "▶"}
-        </span>
+        {isPlaying ? "■" : "▶"}
       </button>
 
       <div style={{ flex: 1, minWidth: 0 }}>

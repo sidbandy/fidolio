@@ -24,8 +24,8 @@ export function PreviewProvider({ children }) {
         const AC = window.AudioContext || window.webkitAudioContext;
         ctxRef.current = new AC();
         analyserRef.current = ctxRef.current.createAnalyser();
-        analyserRef.current.fftSize = 128;
-        analyserRef.current.smoothingTimeConstant = 0.82;
+        analyserRef.current.fftSize = 256;            // more bins → more detail
+        analyserRef.current.smoothingTimeConstant = 0.5;  // less internal smoothing → snaps with the audio
         analyserRef.current.connect(ctxRef.current.destination);
       }
       if (ctxRef.current.state === "suspended") ctxRef.current.resume();

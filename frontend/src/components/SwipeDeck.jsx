@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import { C, FONT, TYPE } from "../theme";
-import Waveform from "./Waveform";
 import { usePreviewContext } from "../context/PreviewProvider";
 
 // Dating-app style triage deck. Drag left = remove (✕), right = keep (♥).
@@ -22,9 +21,8 @@ function CardFace({ card, drag }) {
 
       <div style={{ position: "relative", display: "flex", justifyContent: "center", padding: "8px 0 4px" }}>
         <button onClick={(e) => { e.stopPropagation(); play(card.id, card.title, card.sub); }}
-          style={{ position: "relative", width: 96, height: 96, borderRadius: "50%", border: `1px solid ${isPlaying ? C.green : C.border}`, background: "#101010", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {isPlaying && <Waveform size={92} active seed={card.id} />}
-          <span style={{ position: "absolute", fontSize: isPlaying ? 12 : 16, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.7)" }}>{isPlaying ? "■" : "▶"}</span>
+          style={{ width: 72, height: 72, borderRadius: "50%", border: "none", background: isPlaying ? C.green : "#1a1a1a", color: isPlaying ? "#000" : "#fff", cursor: "pointer", fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+          {isPlaying ? "■" : "▶"}
         </button>
       </div>
 

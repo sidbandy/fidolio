@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
 } from "recharts";
 import { C, TYPE, FONT, MOOD, moodKey, axisTick, chartTooltip } from "../theme";
 import { PageHeader, StatBlock, Card, Reveal, Pill, Department, EmptyState, InfoTip } from "../ui";
@@ -77,6 +77,44 @@ function StackBar({ title, parts }) {
       </div>
     </div>
   );
+}
+
+// Donut ring — the cooler replacement for flat distribution bars.
+function Donut({ parts, centerTop, centerSub, size = 132 }) {
+  const shown = parts.filter((p) => p.value > 0);
+  const total = shown.reduce((s, p) => s + p.value, 0) || 1;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ position: "relative", width: size, height: size }}>
+        <PieChart width={size} height={size}>
+          <Pie data={shown} dataKey="value" nameKey="name" cx="50%" cy="50%"
+               innerRadius={size * 0.33} outerRadius={size * 0.48} paddingAngle={2}
+               stroke="none" startAngle={90} endAngle={-270} isAnimationActive={false}>
+            {shown.map((p, i) => <Cell key={i} fill={p.color} />)}
+          </Pie>
+        </PieChart>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+          <div style={{ fontFamily: FONT.display, fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1, textTransform: "capitalize" }}>{centerTop}</div>
+          {centerSub != null && <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{centerSub}</div>}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "3px 10px", marginTop: 10 }}>
+        {shown.map((p) => (
+          <span key={p.name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: C.sub }}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: p.color, flexShrink: 0 }} />
+            <span style={{ textTransform: "capitalize" }}>{p.name}</span>
+            <b style={{ color: "#fff" }}>{Math.round((p.value / total) * 100)}%</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function topPart(parts) {
+  const total = parts.reduce((s, p) => s + (p.value || 0), 0) || 1;
+  const top = parts.reduce((a, b) => ((b.value || 0) > (a.value || 0) ? b : a), parts[0] || { name: "—", value: 0 });
+  return { name: top.name, pct: Math.round(((top.value || 0) / total) * 100) };
 }
 
 function RankRow({ i, title, sub, right, bar }) {
@@ -302,7 +340,7 @@ export default function Identity() {
     );
   }
 
-  const { averages, mood_distribution, energy_distribution, signature_mood, peak_year, artist_count } = sonic;
+  const { averages, mood_distribution, energy_distribution, signature_mood, peak_year, artist_count, decade_distribution } = sonic;
   const groove = Math.round(((averages.energy + averages.danceability) / 2) * 100);
 
   const radarData = [
@@ -346,10 +384,10 @@ export default function Identity() {
               </>
             }
           />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "20px 40px" }}>
             <StatBlock value={Math.round(averages.tempo)} label="Avg BPM" format={(n) => Math.round(n)} />
             <StatBlock value={groove} label="Groove" format={pct} />
-            <StatBlock value={signature_mood || "—"} label="Signature Mood" accent={accent} />
+            <StatBlock value={signature_mood || "—"} label="Signature Mood" accent={accent} valueStyle={{ fontSize: "clamp(26px, 3.4vw, 38px)" }} />
             <StatBlock value={peak_year ? String(peak_year) : "—"} label="Peak Year" />
             <StatBlock value={artist_count || 0} label="Artists" format={(n) => Math.round(n).toLocaleString()} />
           </div>
@@ -380,35 +418,63 @@ export default function Identity() {
                 ))}
               </div>
             </Card>
-            <Card>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div style={{ ...TYPE.micro }}>Distributions</div>
-                <InfoTip title="Mood & Energy">{moodReading(mood_distribution)} {energyReading(energy_distribution)}</InfoTip>
-              </div>
-              <StackBar
-                title="Mood"
-                parts={[
-                  { name: "Dark", value: mood_distribution.dark, color: C.indigo },
-                  { name: "Neutral", value: mood_distribution.neutral, color: C.violet },
-                  { name: "Happy", value: mood_distribution.happy, color: C.green },
-                ]}
-              />
-              <StackBar
-                title="Energy"
-                parts={[
-                  { name: "Calm", value: energy_distribution.calm, color: C.blue },
-                  { name: "Medium", value: energy_distribution.medium, color: C.amber },
-                  { name: "Intense", value: energy_distribution.intense, color: C.red },
-                ]}
-              />
-            </Card>
-            <Card>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div style={{ ...TYPE.micro }}>Languages</div>
-                <InfoTip title="Languages">{langReading(languages)}</InfoTip>
-              </div>
-              {languages ? <StackBar title={`${languages.length} detected`} parts={buildLangParts(languages)} /> : <div style={{ ...TYPE.body, fontSize: 12 }}>Loading…</div>}
-            </Card>
+            {(() => {
+              const moodParts = [
+                { name: "dark", value: mood_distribution.dark, color: C.indigo },
+                { name: "neutral", value: mood_distribution.neutral, color: C.violet },
+                { name: "happy", value: mood_distribution.happy, color: C.green },
+              ];
+              const energyParts = [
+                { name: "calm", value: energy_distribution.calm, color: C.blue },
+                { name: "medium", value: energy_distribution.medium, color: C.amber },
+                { name: "intense", value: energy_distribution.intense, color: C.red },
+              ];
+              const langParts = buildLangParts(languages);
+              const decadeParts = (decade_distribution || []).map((d, i) => ({
+                name: `${d.decade}s`, value: d.count, color: LANG_COLORS[i % LANG_COLORS.length],
+              }));
+              const mTop = topPart(moodParts), eTop = topPart(energyParts), dTop = topPart(decadeParts);
+              return (<>
+                <Card>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                    <div style={{ ...TYPE.micro }}>Distributions</div>
+                    <InfoTip title="Mood · Energy · Language">{moodReading(mood_distribution)} {energyReading(energy_distribution)} {langReading(languages)}</InfoTip>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 18, justifyItems: "center" }}>
+                    <div>
+                      <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Mood</div>
+                      <Donut parts={moodParts} centerTop={mTop.name} centerSub={`${mTop.pct}%`} />
+                    </div>
+                    <div>
+                      <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Energy</div>
+                      <Donut parts={energyParts} centerTop={eTop.name} centerSub={`${eTop.pct}%`} />
+                    </div>
+                    <div>
+                      <div style={{ ...TYPE.micro, textAlign: "center", marginBottom: 10 }}>Language</div>
+                      {languages
+                        ? <Donut parts={langParts} centerTop={langParts.length} centerSub="languages" />
+                        : <div style={{ ...TYPE.body, fontSize: 12 }}>Loading…</div>}
+                    </div>
+                  </div>
+                </Card>
+                <Card>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                    <div style={{ ...TYPE.micro }}>Eras</div>
+                    <InfoTip title="Eras">The release-year span of your library by decade. Your center of gravity is the {dTop.name} ({dTop.pct}% of saves) — where your taste lives.</InfoTip>
+                  </div>
+                  {decadeParts.length
+                    ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <Donut parts={decadeParts} centerTop={dTop.name} centerSub={`${dTop.pct}%`} size={150} />
+                        <div style={{ ...TYPE.body, fontSize: 12, textAlign: "center", marginTop: 14 }}>
+                          Your taste lives in the <span style={{ color: "#fff" }}>{dTop.name}</span>.
+                        </div>
+                      </div>
+                    )
+                    : <div style={{ ...TYPE.body, fontSize: 12 }}>Not enough release-year data yet.</div>}
+                </Card>
+              </>);
+            })()}
           </div>
         </Reveal>
 

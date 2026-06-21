@@ -197,6 +197,11 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
     cur.execute("SELECT COUNT(DISTINCT artist) FROM tracks WHERE user_id = %s", (user_id,))
     artist_count = cur.fetchone()[0]
 
+    cur.execute("""SELECT (release_year/10)*10 AS decade, COUNT(*)
+                   FROM tracks WHERE user_id = %s AND release_year >= 1950
+                   GROUP BY decade ORDER BY decade""", (user_id,))
+    decade_distribution = [{"decade": int(d), "count": int(c)} for d, c in cur.fetchall()]
+
     cur.close()
     conn.close()
     return {
@@ -216,6 +221,7 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
         "signature_mood": signature_mood,
         "peak_year": peak_year,
         "artist_count": artist_count,
+        "decade_distribution": decade_distribution,
         "rabbit_holes": rabbit_holes
     }
 

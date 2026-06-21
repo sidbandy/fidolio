@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { C, FONT, TYPE, moodColor, SIDEBAR } from "../theme";
-import Waveform from "./Waveform";
 import { usePreviewContext } from "../context/PreviewProvider";
 
 const KICKER = { fontFamily: FONT.body, fontSize: 10, fontWeight: 700, letterSpacing: "1.6px", textTransform: "uppercase" };
@@ -24,11 +23,9 @@ export default function NowPlaying({ variant = "bar" }) {
   const [lyricLines, setLyricLines] = useState(null);   // null=loading, []=none, [...]=synced
   const [lyricIdx, setLyricIdx] = useState(0);
   const [plainLyrics, setPlainLyrics] = useState("");
-  const [showSig, setShowSig] = useState(false);
-  const [domColor, setDomColor] = useState(null);
   const lastFetchTime = useRef(null);
   const trackRef = useRef(null);
-  const { playing: previewId, current: preview, analyser, stop: stopPreview } = usePreviewContext();
+  const { playing: previewId, current: preview, stop: stopPreview } = usePreviewContext();
 
   useEffect(() => {
     const poll = async () => {
@@ -79,33 +76,6 @@ export default function NowPlaying({ variant = "bar" }) {
     return () => clearInterval(id);
   }, [lyricsView, lyricLines]);
 
-  // Pull a vivid dominant color from the album art for the signature overlay.
-  // Spotify's CDN may taint the canvas (no CORS) — if so we fall back to mood color.
-  useEffect(() => {
-    if (!track?.album_art) { setDomColor(null); return; }
-    let alive = true;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const c = document.createElement("canvas"); c.width = 16; c.height = 16;
-        const g = c.getContext("2d"); g.drawImage(img, 0, 0, 16, 16);
-        const data = g.getImageData(0, 0, 16, 16).data;
-        let r = 0, gg = 0, b = 0, n = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          const R = data[i], G = data[i + 1], B = data[i + 2];
-          const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
-          if (mx - mn < 22 || mx < 40 || mx > 232) continue;   // skip greys/black/white
-          r += R; gg += G; b += B; n++;
-        }
-        if (alive) setDomColor(n > 4 ? `rgb(${Math.round(r / n)},${Math.round(gg / n)},${Math.round(b / n)})` : null);
-      } catch { if (alive) setDomColor(null); }
-    };
-    img.onerror = () => { if (alive) setDomColor(null); };
-    img.src = track.album_art;
-    return () => { alive = false; };
-  }, [track?.album_art]);
-
   const fetchLyrics = async () => {
     if (!track) return;
     setLoadingLyrics(true); setLyricsOpen(true);
@@ -116,35 +86,29 @@ export default function NowPlaying({ variant = "bar" }) {
     setLoadingLyrics(false);
   };
 
-  // A 30s preview (triggered anywhere in the app) takes over the dock with the
-  // live, audio-reactive waveform — this is the "where does the big waveform live"
-  // answer: same spot as the Spotify now-playing.
+  // A 30s preview (triggered anywhere) takes over the dock with a clean player.
   if (previewId && preview) {
-    const pv = preview.features?.valence;
-    const wave = (d) => (
-      <Waveform size={d} active analyser={analyser}
-        valence={pv} features={preview.features} seed={preview.id || preview.name} />
-    );
     if (variant === "panel") {
       return (
         <div style={{ position: "relative", borderTop: `1px solid ${C.border}`, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 40%, rgba(29,185,84,0.13), rgba(8,8,8,0.98))", zIndex: 0 }} />
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 40%, rgba(29,185,84,0.12), rgba(8,8,8,0.98))", zIndex: 0 }} />
           <div style={{ position: "relative", zIndex: 1, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
             <div style={{ ...KICKER, color: C.green, alignSelf: "flex-start" }}>Preview</div>
-            <div style={{ display: "flex", justifyContent: "center", padding: "6px 0" }}>{wave(184)}</div>
+            <button onClick={stopPreview} aria-label="Stop preview"
+              style={{ width: 92, height: 92, borderRadius: "50%", border: `2px solid ${C.green}`, background: "rgba(29,185,84,0.10)", color: C.green, fontSize: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 30px ${C.green}33` }}>■</button>
             <div style={{ textAlign: "center", width: "100%" }}>
               <div style={{ fontFamily: FONT.display, fontSize: 17, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.name}</div>
               <div style={{ fontSize: 12, color: "#cdcdcd", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.artist}</div>
             </div>
-            <button onClick={stopPreview} style={{ width: "100%", padding: 10, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>■ Stop preview</button>
+            <button onClick={stopPreview} style={{ width: "100%", padding: 10, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.09)", color: "#e6e6e6", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Stop preview</button>
           </div>
         </div>
       );
     }
     return (
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)", borderTop: `1px solid ${C.border}`, zIndex: 1000 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 14px" }}>
-          <div style={{ width: 42, height: 42, flexShrink: 0 }}>{wave(42)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px" }}>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", flexShrink: 0, background: C.greenBg, border: `1px solid ${C.greenBd}`, display: "flex", alignItems: "center", justifyContent: "center", color: C.green, fontSize: 14 }}>♪</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview.name} <span style={{ color: C.muted, fontWeight: 400 }}>— {preview.artist}</span></div>
             <div style={{ fontSize: 10.5, color: C.green, marginTop: 2 }}>Preview</div>
@@ -265,17 +229,6 @@ export default function NowPlaying({ variant = "bar" }) {
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.35)" }}>
               <div style={{ height: 3, background: C.green, width: `${progressPct}%`, transition: "width 1s linear" }} />
             </div>
-            {showSig && (
-              <div style={{ position: "absolute", inset: 0, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center",
-                background: "radial-gradient(circle at 50% 45%, rgba(0,0,0,0.32), rgba(0,0,0,0.64))" }}>
-                <Waveform size={150} active={false} features={f} valence={f?.valence} color={domColor || moodColor(f?.valence)} seed={track.name} />
-              </div>
-            )}
-            <button onClick={() => setShowSig((s) => !s)} title="Sonic signature"
-              style={{ position: "absolute", top: 8, right: 8, zIndex: 3, width: 30, height: 30, borderRadius: "50%",
-                border: `1px solid ${showSig ? C.green : "rgba(255,255,255,0.28)"}`,
-                background: showSig ? C.green : "rgba(0,0,0,0.5)", color: showSig ? "#000" : "#fff",
-                cursor: "pointer", fontSize: 15, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(3px)" }}>∿</button>
             <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "30px 12px 11px", background: "linear-gradient(transparent, rgba(0,0,0,0.92))", zIndex: 2 }}>
               {track.in_library && (
                 <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: "rgba(13,43,24,0.85)", padding: "2px 6px", borderRadius: 4, marginBottom: 5, display: "inline-block" }}>IN LIBRARY</span>
