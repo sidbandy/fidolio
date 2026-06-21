@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
 import useMediaQuery from "../hooks/useMediaQuery";
 import { MOBILE_Q } from "../components/Spine";
+import SwipeDeck from "../components/SwipeDeck";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -857,6 +858,13 @@ export default function Playlists({ embedded = false }) {
   const [loading,    setLoading]    = useState(false);
   const [searchQ,    setSearchQ]    = useState("");
 
+  // Swipe-to-build
+  const [curateTarget, setCurateTarget] = useState(25);
+  const [curating,     setCurating]     = useState(false);
+  const [curateCards,  setCurateCards]  = useState(null);
+  const [chosen,       setChosen]       = useState([]);
+  const [creating,     setCreating]     = useState(false);
+
   const [saved,      setSaved]      = useState([]);
   const [savedLoading, setSavedLoading] = useState(false);
 
@@ -1059,6 +1067,41 @@ export default function Playlists({ embedded = false }) {
   };
 
   // ── Filtered tracks for search-within-results ────────────────────────────
+  // ── Swipe-to-build ─────────────────────────────────────────────────────────
+  const startCurate = async () => {
+    setCurating(true); setCurateCards(null); setChosen([]);
+    try {
+      const r = await fetch(`${API}/playlists/curate`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conditions, excludes, target: Number(curateTarget) || 25 }),
+      });
+      const d = await r.json();
+      setCurateCards((d.tracks || []).map((t) => ({
+        key: t.id, id: t.id, title: t.name, sub: t.artist,
+        meta: `${t.fit != null ? Math.round(t.fit * 100) + "% fit" : ""}${t.album ? " · " + t.album : ""}`,
+      })));
+    } catch {
+      setCurateCards([]);
+    }
+  };
+
+  const createFromChosen = async () => {
+    if (!chosen.length) return;
+    const name = prompt("Name your playlist:", "Fidolio Curated");
+    if (!name) return;
+    setCreating(true);
+    try {
+      const r = await fetch(`${API}/playlists/from-tracks`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, track_ids: chosen }),
+      });
+      const d = await r.json();
+      if (d.success) { alert(`✓ Created "${name}" with ${d.track_count} songs on Spotify.`); setCurating(false); }
+      else alert("Couldn't create: " + (d.error || "unknown error"));
+    } catch (e) { alert("Failed: " + e.message); }
+    setCreating(false);
+  };
+
   const displayed = (tracks || []).filter(t =>
     !searchQ ||
     t.name.toLowerCase().includes(searchQ.toLowerCase()) ||
@@ -1161,6 +1204,7 @@ export default function Playlists({ embedded = false }) {
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                   style={{ ...input(), flex: 1, minWidth: "130px" }}>
+                  <option value="cohesion">Best fit (cohesion)</option>
                   <option value="saved_at">Date Saved</option>
                   <option value="energy">Energy</option>
                   <option value="valence">Valence</option>
@@ -1247,10 +1291,20 @@ export default function Playlists({ embedded = false }) {
                 )}
 
                 {/* Search within results */}
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                   <input value={searchQ} placeholder="Search within results..."
                     onChange={e => setSearchQ(e.target.value)}
-                    style={{ ...input(), flex: 1 }} />
+                    style={{ ...input(), flex: 1, minWidth: "150px" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                    title="How many songs you want — you'll be shown 1.25× to swipe through">
+                    <input type="number" min="5" max="100" value={curateTarget}
+                      onChange={e => setCurateTarget(e.target.value)}
+                      style={{ ...input(), width: "62px", textAlign: "center" }} />
+                    <button onClick={startCurate} disabled={!tracks?.length}
+                      style={btn("ghost", { whiteSpace: "nowrap", opacity: tracks?.length ? 1 : 0.5 })}>
+                      🃏 Curate by swipe
+                    </button>
+                  </div>
                   <button onClick={() => setShowSave(true)}
                     style={btn("primary", { whiteSpace: "nowrap" })}>
                     Save as Playlist →
@@ -1361,6 +1415,38 @@ export default function Playlists({ embedded = false }) {
       )}
 
       {/* ── Modals ────────────────────────────────────────────────────────── */}
+      {curating && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(8,8,8,0.97)", zIndex: 300,
+          display: "flex", flexDirection: "column", padding: "24px 20px 28px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+            maxWidth: "480px", width: "100%", margin: "0 auto 10px" }}>
+            <div>
+              <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff" }}>Curate by swipe</div>
+              <div style={{ fontSize: "12px", color: C.sub, marginTop: "2px" }}>
+                <span style={{ color: C.green, fontWeight: 700 }}>{chosen.length}</span> of {curateTarget} chosen · best-fitting first
+              </div>
+            </div>
+            <button onClick={() => setCurating(false)}
+              style={{ background: "none", border: "none", color: C.muted, fontSize: "22px", cursor: "pointer", lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {curateCards === null
+              ? <div style={{ color: C.sub, fontSize: "14px" }}>Finding the songs that fit best…</div>
+              : curateCards.length === 0
+                ? <div style={{ color: C.sub, fontSize: "14px", textAlign: "center" }}>No tracks match this rule.<br />Loosen your conditions and try again.</div>
+                : <SwipeDeck cards={curateCards}
+                    onKeep={(c) => setChosen((p) => (p.includes(c.id) ? p : [...p, c.id]))}
+                    onRemove={() => {}} />}
+          </div>
+          <div style={{ maxWidth: "480px", width: "100%", margin: "0 auto" }}>
+            <button onClick={createFromChosen} disabled={!chosen.length || creating}
+              style={btn("primary", { width: "100%", padding: "13px", opacity: (chosen.length && !creating) ? 1 : 0.5 })}>
+              {creating ? "Creating…" : `Create playlist (${chosen.length} song${chosen.length === 1 ? "" : "s"})`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {showSave && (
         <SaveModal
           stats={stats}

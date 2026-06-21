@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from typing import Optional
 import psycopg2, json, os, requests
 from dotenv import load_dotenv
-from core import spotify_api
+from core import spotify_api, similarity
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
@@ -283,6 +283,28 @@ def taste_score(track_id, profile, cur):
     return s / 5
 
 
+def _track_feats(t):
+    return {"energy": t["energy"], "valence": t["valence"], "tempo": t["tempo"],
+            "danceability": t["danceability"], "acousticness": t["acousticness"]}
+
+def rank_by_cohesion(tracks, cur, user_id):
+    """Rank rule-matched tracks by how well they sit with the SET as a whole — closeness
+    to the matched set's centroid in normalized feature space. Makes a playlist feel
+    cohesive (the songs belong together), not just individually rule-passing. Annotates
+    each track with `fit` (0..1). Tracks missing features sink to the bottom."""
+    feats = [_track_feats(t) for t in tracks if t["energy"] is not None]
+    if len(feats) < 2:
+        for t in tracks:
+            t["fit"] = None
+        return tracks
+    stats = similarity.library_feature_stats(cur, user_id)
+    cv = similarity.to_vector(similarity.merge_features(feats), stats)
+    for t in tracks:
+        t["fit"] = (similarity.score(cv, similarity.to_vector(_track_feats(t), stats))
+                    if t["energy"] is not None else -1)
+    return sorted(tracks, key=lambda t: (t["fit"] if t["fit"] is not None else -1), reverse=True)
+
+
 def fetch_spotify_tracks(sp, playlist_id):
     return spotify_api.get_items(sp, playlist_id)
 
@@ -333,6 +355,39 @@ class FromTracksBody(BaseModel):
     track_ids: list
     public:    bool = False
     user_id:   str  = "0tz6fep2m5bx1vq85g48518u9"
+
+
+class CurateBody(BaseModel):
+    conditions: list = []
+    excludes:   list = []
+    target:     int  = 25
+    user_id:    str  = "0tz6fep2m5bx1vq85g48518u9"
+
+
+@router.post("/curate")
+def curate(body: CurateBody):
+    """Swipe-to-build candidates: rule-matched tracks ranked by cohesion (closeness to
+    the matched set's centroid), returning ~1.25x the target so the user can swipe to
+    include/exclude and still land on their number with the best-fitting songs first."""
+    import math
+    conn = get_conn(); cur = conn.cursor()
+    query, params = build_query(body.conditions, body.excludes, body.user_id,
+                                "saved_at", "desc", limit=600)
+    try:
+        cur.execute(query, params)
+    except Exception as e:
+        cur.close(); conn.close()
+        if "language" in str(e).lower():
+            return {"error": "Language column not set up — call POST /playlists/setup first."}
+        raise
+    tracks = rows_to_tracks(cur.fetchall())
+    if not tracks:
+        cur.close(); conn.close()
+        return {"tracks": [], "target": body.target, "matched": 0}
+    ranked = rank_by_cohesion(tracks, cur, body.user_id)
+    cur.close(); conn.close()
+    n = max(1, math.ceil(body.target * 1.25))
+    return {"tracks": ranked[:n], "target": body.target, "matched": len(tracks)}
 
 
 @router.post("/from-tracks")
@@ -551,6 +606,8 @@ def preview(body: PreviewBody):
             return {"error": "Language column not set up — call POST /playlists/setup first."}
         raise
     tracks = rows_to_tracks(cur.fetchall())
+    if body.sort_by == "cohesion":
+        tracks = rank_by_cohesion(tracks, cur, body.user_id)
     cur.close(); conn.close()
     return {"tracks": tracks, "stats": compute_stats(tracks)}
 
