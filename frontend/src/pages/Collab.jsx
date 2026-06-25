@@ -1,37 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import usePreview from "../hooks/usePreview";
+import { C, FONT, TYPE, SECTION, PAGE_BG, btn as themeBtn, card as themeCard, pill as themePill, input as themeInput } from "../theme";
+import Masthead from "../ui/Masthead";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const C = {
-  bg: "#080808", card: "#0e0e0e", card2: "#111",
-  border: "#1a1a1a", border2: "#222",
-  green: "#1db954", greenBg: "#0d2b18", greenBd: "#1a4a2a",
-  amber: "#f59e0b", amberBg: "#1a1200",
-  indigo: "#6366f1", red: "#ef4444", redBg: "#1a0808",
-  muted: "#555", sub: "#888", label: "#444",
-};
-const card = (extra = {}) => ({
-  background: C.card, border: `1px solid ${C.border}`,
-  borderRadius: "14px", padding: "20px 22px", ...extra,
-});
-const btn = (v = "primary", extra = {}) => {
-  const base = { padding: "9px 18px", borderRadius: "10px", fontSize: "13px",
-    fontWeight: 700, cursor: "pointer", border: "none", transition: "all 0.15s" };
-  if (v === "primary") return { ...base, background: C.green, color: "#000", ...extra };
-  if (v === "ghost")   return { ...base, background: "#151515", color: C.sub,
-    border: `1px solid ${C.border}`, ...extra };
-  if (v === "danger")  return { ...base, background: C.redBg, color: C.red,
-    border: `1px solid #3a1a1a`, ...extra };
-  return { ...base, ...extra };
-};
-const inp = (extra = {}) => ({
-  background: C.card2, border: `1px solid ${C.border}`, borderRadius: "10px",
-  padding: "10px 14px", color: "#fff", fontSize: "13px", outline: "none",
-  width: "100%", boxSizing: "border-box", ...extra,
-});
+// Section 5 — royal purple (Playlists department)
+const AC = SECTION[5].color;
+const AW = SECTION[5].wash;
+const AON = SECTION[5].on;
 
 // ─── Vibe presets (mirrors backend) ──────────────────────────────────────────
 const VIBES = [
@@ -71,12 +49,18 @@ const getNameFor = room_id => {
 
 // ─── ScoreBadge ───────────────────────────────────────────────────────────────
 function ScoreBadge({ score }) {
-  const col = score > 0 ? C.green : score < 0 ? C.red : C.muted;
+  const positive = score > 0;
+  const negative = score < 0;
+  const bg     = positive ? AC : negative ? C.red : "transparent";
+  const color  = positive ? C.ink2  : negative ? C.ink : C.muted;
+  const border = positive ? AC : negative ? C.red : C.border2;
   return (
-    <div style={{ minWidth: "34px", height: "34px", borderRadius: "8px",
-      background: "#111", border: `1px solid ${col}33`,
+    <div style={{
+      minWidth: "34px", height: "34px", borderRadius: "4px",
+      background: bg, border: `1.5px solid ${border}`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: "13px", fontWeight: 800, color: col, flexShrink: 0 }}>
+      fontFamily: FONT.mono, fontSize: "13px", fontWeight: 800, color, flexShrink: 0,
+    }}>
       {score > 0 ? "+" : ""}{score}
     </div>
   );
@@ -85,40 +69,42 @@ function ScoreBadge({ score }) {
 
 // ─── QR Share popover ─────────────────────────────────────────────────────────
 function SharePopover({ roomId, onClose }) {
-  const url      = `${window.location.origin}/collab/${roomId}`;
-  const qrUrl    = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=1db954&bgcolor=0e0e0e&data=${encodeURIComponent(url)}`;
+  const url   = `${window.location.origin}/collab/${roomId}`;
+  // QR with warm-charcoal-on-cream palette
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=161410&bgcolor=F1EDE4&data=${encodeURIComponent(url)}`;
   const [copied, setCopied] = useState(false);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
-      zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}>
-      <div style={{ ...card(), width: "280px", textAlign: "center",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
-        onClick={e => e.stopPropagation()}>
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(22,20,16,0.7)",
+      zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center",
+    }} onClick={onClose}>
+      <div style={{
+        ...themeCard({ width: "292px", textAlign: "center", padding: "28px 24px" }),
+        boxShadow: "0 12px 32px rgba(0,0,0,0.45)", border: `1.5px solid ${C.border2}`,
+      }} onClick={e => e.stopPropagation()}>
 
-        <div style={{ fontSize: "13px", fontWeight: 700, color: C.sub, marginBottom: "14px" }}>
-          Share this room
-        </div>
+        <div style={{ ...TYPE.micro, marginBottom: "18px" }}>Share this room</div>
 
-        {/* QR code */}
-        <img src={qrUrl} alt="QR" style={{ width: "160px", height: "160px",
-          borderRadius: "10px", border: `1px solid ${C.border}` }} />
+        <img src={qrUrl} alt="QR" style={{
+          width: "160px", height: "160px",
+          border: `1.5px solid ${C.border2}`, borderRadius: "3px", display: "block", margin: "0 auto",
+        }} />
 
         {/* Room code */}
-        <div style={{ fontSize: "28px", fontWeight: 800, color: C.green,
-          letterSpacing: "4px", margin: "14px 0 4px" }}>
+        <div style={{
+          fontFamily: FONT.mono, fontSize: "28px", fontWeight: 800, color: AC,
+          letterSpacing: "4px", margin: "18px 0 2px",
+        }}>
           {roomId}
         </div>
-        <div style={{ fontSize: "11px", color: C.muted, marginBottom: "16px" }}>
-          Room code
-        </div>
+        <div style={{ ...TYPE.micro, marginBottom: "20px" }}>Room code</div>
 
         <button onClick={() => {
           navigator.clipboard.writeText(url);
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
-        }} style={btn(copied ? "primary" : "ghost", { width: "100%" })}>
+        }} style={themeBtn(copied ? "primary" : "ghost", { width: "100%" })}>
           {copied ? "✓ Copied!" : "Copy Link"}
         </button>
       </div>
@@ -187,15 +173,16 @@ function SongSearch({ roomId, myName, onSubmitted }) {
     <div ref={wrapRef} style={{ position: "relative" }}>
       <input value={query} onChange={e => setQuery(e.target.value)}
         placeholder="Search any song to add..."
-        style={inp()} autoComplete="off" />
+        style={themeInput({ width: "100%" })} autoComplete="off" />
 
       {(results.length > 0 || loading) && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
-          background: "#111", border: `1px solid ${C.border}`, borderRadius: "12px",
-          overflow: "hidden", zIndex: 50, boxShadow: "0 12px 40px rgba(0,0,0,0.7)" }}>
-
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
+          background: C.card, border: `1.5px solid ${C.border2}`, borderRadius: "4px",
+          overflow: "hidden", zIndex: 50, boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+        }}>
           {loading && (
-            <div style={{ padding: "14px 16px", color: C.muted, fontSize: "13px" }}>
+            <div style={{ padding: "14px 16px", ...TYPE.body, fontSize: "13px" }}>
               Searching...
             </div>
           )}
@@ -204,27 +191,31 @@ function SongSearch({ roomId, myName, onSubmitted }) {
             const state = added[track.id];
             return (
               <div key={track.id}
-                style={{ display: "flex", alignItems: "center", gap: "10px",
-                  padding: "10px 14px", borderBottom: `1px solid ${C.border}`,
-                  transition: "background 0.1s",
-                  background: state?.ok ? C.greenBg : "transparent" }}>
+                style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "12px 14px",
+                  borderBottom: `1px solid ${C.border}`,
+                  background: state?.ok ? AW : "transparent",
+                }}>
 
                 {track.image
                   ? <img src={track.image} alt="" style={{ width: "38px", height: "38px",
-                      borderRadius: "5px", flexShrink: 0, objectFit: "cover" }} />
-                  : <div style={{ width: "38px", height: "38px", borderRadius: "5px",
-                      background: C.border, flexShrink: 0 }} />}
+                      borderRadius: "3px", flexShrink: 0, objectFit: "cover" }} />
+                  : <div style={{ width: "38px", height: "38px", borderRadius: "3px",
+                      background: C.border2, flexShrink: 0 }} />}
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{
+                    fontFamily: FONT.ui, fontSize: "13px", fontWeight: 600, color: C.ink,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
                     {track.name}
                   </div>
-                  <div style={{ fontSize: "11px", color: C.muted }}>
+                  <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.muted }}>
                     {track.artist} · {track.album}
                   </div>
                   {state && !state.ok && (
-                    <div style={{ fontSize: "11px", color: C.red, marginTop: "2px" }}>
+                    <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.red, marginTop: "2px" }}>
                       {state.msg}
                     </div>
                   )}
@@ -232,11 +223,15 @@ function SongSearch({ roomId, myName, onSubmitted }) {
 
                 <button onClick={() => !state?.ok && submit(track)}
                   disabled={!!state?.ok}
-                  style={{ padding: "6px 14px", borderRadius: "8px", border: "none",
-                    background: state?.ok ? C.greenBg : C.green,
-                    color: state?.ok ? C.green : "#000",
-                    fontSize: "11px", fontWeight: 700, flexShrink: 0,
-                    cursor: state?.ok ? "default" : "pointer" }}>
+                  style={{
+                    padding: "6px 14px", borderRadius: "3px",
+                    border: `1.5px solid ${state?.ok ? C.border2 : AC}`,
+                    background: state?.ok ? "transparent" : AC,
+                    color: state?.ok ? C.muted : C.ink2,
+                    fontFamily: FONT.ui, fontSize: "11px", fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: "0.04em",
+                    flexShrink: 0, cursor: state?.ok ? "default" : "pointer",
+                  }}>
                   {state?.ok ? "✓ Added" : "+ Add"}
                 </button>
               </div>
@@ -266,7 +261,6 @@ function Room({ roomId, myName, onLeave }) {
       const r = await fetch(`${API}/collab/${roomId}?voter_name=${encodeURIComponent(myName)}`);
       const d = await r.json();
       setRoom(d);
-      // Keep room in localStorage
       if (d.room_name) saveRoom(roomId, d.room_name, myName, d.vibe_label);
     } catch {}
     setLoading(false);
@@ -326,102 +320,121 @@ function Room({ roomId, myName, onLeave }) {
 
   if (loading && !room) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "60vh", color: C.muted, fontSize: "14px" }}>
+      <div style={{ ...TYPE.body, display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
         Loading room...
       </div>
     );
   }
   if (!room) {
     return (
-      <div style={{ padding: "60px", textAlign: "center", color: C.muted }}>
+      <div style={{ padding: "60px", textAlign: "center", ...TYPE.body }}>
         Room not found.
       </div>
     );
   }
 
-  const isOwner   = room.owner?.trim().toLowerCase() === myName?.trim().toLowerCase();
-  const isOpen    = room.status !== "finalized";
-  const eligible  = room.submissions.filter(s => s.score >= minScore);
-  const hasVibe   = Boolean(room.vibe_preset);
+  const isOwner  = room.owner?.trim().toLowerCase() === myName?.trim().toLowerCase();
+  const isOpen   = room.status !== "finalized";
+  const eligible = room.submissions.filter(s => s.score >= minScore);
+  const hasVibe  = Boolean(room.vibe_preset);
 
   return (
-    <div style={{ padding: "8px 0 100px", maxWidth: "980px", margin: "0 auto", width: "100%" }}>
+    <div style={{ background: PAGE_BG, minHeight: "100vh", "--accent": AC, "--accent-ink": AON, "--accent-wash": AW }}>
 
       {showShare && <SharePopover roomId={roomId} onClose={() => setShowShare(false)} />}
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between",
-          alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px",
-              flexWrap: "wrap", marginBottom: "6px" }}>
-              <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#fff" }}>
-                {room.room_name}
-              </h1>
-              {hasVibe && (
-                <span style={{ fontSize: "12px", fontWeight: 700, padding: "3px 10px",
-                  borderRadius: "12px", background: C.greenBg, color: C.green,
-                  border: `1px solid ${C.greenBd}` }}>
-                  {room.vibe_label}
-                </span>
-              )}
-              {!isOpen && (
-                <span style={{ fontSize: "12px", fontWeight: 700, padding: "3px 10px",
-                  borderRadius: "12px", background: "#1a1a0a", color: C.amber,
-                  border: `1px solid #3a3a10` }}>
-                  ✓ Finalized
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: "13px", color: C.muted, display: "flex",
-              gap: "10px", flexWrap: "wrap" }}>
-              <span>Room <span style={{ color: C.green, fontWeight: 700,
-                letterSpacing: "1.5px" }}>{roomId}</span></span>
-              <span>·</span>
-              <span>{room.total_songs} songs</span>
-              <span>·</span>
-              <span>You are <span style={{ color: "#fff" }}>{myName}</span>
-                {isOwner && <span style={{ color: C.green, fontSize: "11px" }}> (creator)</span>}
+      {/* ── Shared masthead (only in standalone mode) ─────────────────── */}
+      <Masthead
+        no="05"
+        section="Playlists · Collab Room"
+        title={room.room_name || "Collab Room"}
+        lede={<>
+          Everybody adds songs and votes. Top picks become a real Spotify playlist.
+          {hasVibe && <> Theme: <b style={{ color: AC }}>{room.vibe_label}</b>.</>}
+          {!isOpen && <> <b style={{ color: AC }}>Finalized.</b></>}
+        </>}
+        actions={<>
+          <button onClick={() => setShowShare(true)} style={{
+            padding: "8px 16px", borderRadius: "4px",
+            border: `1px solid ${C.border2}`,
+            background: "transparent", color: C.ink,
+            fontFamily: FONT.ui, fontSize: "12px", fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer",
+          }}>
+            Share
+          </button>
+          <button onClick={onLeave} style={{
+            padding: "8px 16px", borderRadius: "4px",
+            border: `1px solid ${C.border2}`,
+            background: "transparent", color: C.ink,
+            fontFamily: FONT.ui, fontSize: "12px", fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer",
+          }}>
+            Leave
+          </button>
+        </>}
+      />
+
+      {/* ── Stat strip overlapping the masthead edge ──────────────────── */}
+      <div style={{ maxWidth: 980, margin: "0 auto", padding: "0 24px" }}>
+        <div style={{
+          background: C.card, border: `1px solid ${C.border2}`,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+          borderRadius: "6px", padding: "18px 22px",
+          marginTop: -32, position: "relative",
+          display: "flex", alignItems: "center", gap: "28px", flexWrap: "wrap",
+        }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.sub }}>
+            Room{" "}
+            <span style={{ fontFamily: FONT.mono, fontWeight: 800, color: AC, letterSpacing: "1.5px" }}>
+              {roomId}
+            </span>
+          </div>
+          <div style={{ width: 1, height: 20, background: C.border2, flexShrink: 0 }} />
+          <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.sub }}>
+            <span style={{ fontWeight: 700, color: C.ink }}>{room.total_songs}</span> songs
+          </div>
+          <div style={{ width: 1, height: 20, background: C.border2, flexShrink: 0 }} />
+          <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.sub }}>
+            You are{" "}
+            <span style={{ fontWeight: 700, color: C.ink }}>{myName}</span>
+            {isOwner && (
+              <span style={{ marginLeft: 6, fontFamily: FONT.mono, fontSize: "10px",
+                background: AC, color: C.ink2, padding: "2px 6px", borderRadius: "3px",
+                fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                creator
               </span>
-            </div>
+            )}
           </div>
 
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={() => setShowShare(true)}
-              style={btn("ghost", { fontSize: "12px", padding: "7px 14px" })}>
-              Share 🔗
-            </button>
-            <button onClick={onLeave}
-              style={btn("ghost", { fontSize: "12px", padding: "7px 14px" })}>
-              Leave
-            </button>
-          </div>
+          {/* Room theme note */}
+          {hasVibe && room.vibe_desc && (
+            <>
+              <div style={{ width: 1, height: 20, background: C.border2, flexShrink: 0 }} />
+              <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.sub }}>
+                <span style={{ color: AC, marginRight: 5 }}>●</span>
+                Theme: {room.vibe_desc}
+              </div>
+            </>
+          )}
         </div>
-
-        {/* Vibe guardrail description */}
-        {hasVibe && room.vibe_desc && (
-          <div style={{ marginTop: "8px", fontSize: "12px", color: C.sub,
-            display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ color: C.green }}>●</span>
-            Vibe guardrail: {room.vibe_desc}.
-            Songs that don't fit get a ⚠ flag.
-          </div>
-        )}
 
         {/* Members in the room */}
         {room.members?.length > 0 && (
-          <div style={{ marginTop: "12px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: "10px", color: C.label, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>
+          <div style={{ marginTop: "16px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontFamily: FONT.mono, fontSize: "10px", color: C.label, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>
               In the room · {room.members.length}
             </span>
             {room.members.map((m) => {
               const me = m.trim().toLowerCase() === myName.trim().toLowerCase();
               return (
-                <span key={m} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "12px",
-                  background: me ? C.greenBg : "#151515", color: me ? C.green : C.sub,
-                  border: `1px solid ${me ? C.greenBd : C.border}` }}>
+                <span key={m} style={{
+                  fontFamily: FONT.mono, fontSize: "11px", fontWeight: 600,
+                  padding: "4px 12px", borderRadius: "3px",
+                  background: me ? AC : "transparent",
+                  color: me ? C.ink2 : C.sub,
+                  border: `1.5px solid ${me ? AC : C.border2}`,
+                }}>
                   {m}{me ? " (you)" : ""}
                 </span>
               );
@@ -430,282 +443,353 @@ function Room({ roomId, myName, onLeave }) {
         )}
       </div>
 
-      {/* ── Vibe note (post-submit warning) ───────────────────────────────── */}
-      {vibeNote && (
-        <div style={{ ...card({ background: C.amberBg, border: `1px solid #3a2a00`,
-          padding: "12px 16px", marginBottom: "16px" }),
-          display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "16px" }}>⚠</span>
-          <div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: C.amber }}>
-              Song added, but it's outside the room's vibe
-            </div>
-            <div style={{ fontSize: "12px", color: C.sub, marginTop: "2px" }}>
-              {vibeNote}
-            </div>
-          </div>
-          <button onClick={() => setVibeNote(null)}
-            style={{ background: "none", border: "none", color: C.muted,
-              cursor: "pointer", marginLeft: "auto", fontSize: "18px" }}>×</button>
-        </div>
-      )}
+      {/* ── Page body ─────────────────────────────────────────────────────── */}
+      <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 24px 100px" }}>
 
-      {/* ── Add song section ──────────────────────────────────────────────── */}
-      {isOpen && (
-        <div style={{ marginBottom: "20px" }}>
-          {showSearch ? (
-            <div style={{ ...card() }}>
-              <div style={{ display: "flex", justifyContent: "space-between",
-                alignItems: "center", marginBottom: "12px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>Add a song</div>
-                <button onClick={() => setShowSearch(false)}
-                  style={{ background: "none", border: "none", color: C.muted,
-                    cursor: "pointer", fontSize: "18px" }}>×</button>
+        {/* ── Vibe note (post-submit warning) ─────────────────────────────── */}
+        {vibeNote && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
+            padding: "14px 18px", borderRadius: "4px",
+            background: C.amberBg, border: `1.5px solid ${C.amber}`,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+          }}>
+            <span style={{ fontSize: "16px", flexShrink: 0 }}>⚠</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: FONT.ui, fontSize: "13px", fontWeight: 700, color: C.ink }}>
+                Song added, but it's outside the room's vibe
               </div>
-              <SongSearch roomId={roomId} myName={myName} onSubmitted={handleSubmitted} />
+              <div style={{ fontFamily: FONT.body, fontSize: "12px", color: C.sub, marginTop: 2 }}>
+                {vibeNote}
+              </div>
             </div>
-          ) : (
-            <button onClick={() => setShowSearch(true)}
-              style={{ ...btn("primary"), width: "100%", padding: "12px",
-                fontSize: "14px" }}>
-              + Add a Song
-            </button>
-          )}
-        </div>
-      )}
+            <button onClick={() => setVibeNote(null)} style={{
+              background: "none", border: "none", color: C.muted,
+              cursor: "pointer", fontSize: "18px", lineHeight: 1, flexShrink: 0,
+            }}>×</button>
+          </div>
+        )}
 
-      {/* ── Song list ─────────────────────────────────────────────────────── */}
-      {room.submissions.length === 0 ? (
-        <div style={{ ...card(), textAlign: "center", padding: "60px 20px", color: C.muted }}>
-          <div style={{ fontSize: "36px", marginBottom: "12px" }}>🎵</div>
-          <div style={{ fontSize: "14px" }}>No songs yet.</div>
-          {isOpen && (
-            <div style={{ fontSize: "12px", marginTop: "6px" }}>Be the first to add one!</div>
-          )}
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px",
-          marginBottom: "24px" }}>
-          {room.submissions.map((sub, i) => {
-            const isMyVote1 = sub.my_vote === 1;
-            const isMyVoteN = sub.my_vote === -1;
-            const isMine    = sub.submitted_by?.trim().toLowerCase() === myName?.trim().toLowerCase();
-
-            return (
-              <div key={sub.id} style={{
-                display: "flex", flexDirection: "column", gap: "9px",
-                padding: "11px 14px", borderRadius: "11px",
-                background: isMyVote1 ? C.greenBg : isMyVoteN ? C.redBg : C.card,
-                border: `1px solid ${isMyVote1 ? C.greenBd : isMyVoteN ? "#3a1a1a" : C.border}`,
-                boxShadow: i === 0 ? `0 0 0 1px ${C.greenBd}, 0 6px 20px rgba(29,185,84,0.13)` : "none",
-                transition: "all 0.15s",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-
-                {/* Rank */}
-                <div style={{ width: "22px", fontSize: i < 3 ? "15px" : "11px",
-                  color: i === 0 ? C.green : C.label, fontWeight: i < 3 ? 800 : 400,
-                  flexShrink: 0, textAlign: "center" }}>
-                  {i < 3 ? ["👑", "🥈", "🥉"][i] : i + 1}
+        {/* ── Add song section ─────────────────────────────────────────────── */}
+        {isOpen && (
+          <div style={{ marginBottom: "28px" }}>
+            {showSearch ? (
+              <div style={{ ...themeCard() }}>
+                <div style={{ display: "flex", justifyContent: "space-between",
+                  alignItems: "center", marginBottom: "16px" }}>
+                  <div style={{ fontFamily: FONT.ui, fontSize: "13px", fontWeight: 700, color: C.ink }}>
+                    Add a song
+                  </div>
+                  <button onClick={() => setShowSearch(false)}
+                    style={{ background: "none", border: "none", color: C.muted,
+                      cursor: "pointer", fontSize: "20px", lineHeight: 1 }}>×</button>
                 </div>
+                <SongSearch roomId={roomId} myName={myName} onSubmitted={handleSubmitted} />
+              </div>
+            ) : (
+              <button onClick={() => setShowSearch(true)}
+                style={themeBtn("primary", { width: "100%", padding: "13px", fontSize: "14px" })}>
+                + Add a Song
+              </button>
+            )}
+          </div>
+        )}
 
-                {/* Album art */}
-                {sub.album_image
-                  ? <img src={sub.album_image} alt="" style={{ width: "38px", height: "38px",
-                      borderRadius: "5px", flexShrink: 0, objectFit: "cover" }} />
-                  : <div style={{ width: "38px", height: "38px", borderRadius: "5px",
-                      background: C.border, flexShrink: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "16px", color: C.muted }}>♪</div>}
+        {/* ── Song list ────────────────────────────────────────────────────── */}
+        {room.submissions.length === 0 ? (
+          <div style={{
+            ...themeCard({ textAlign: "center", padding: "60px 20px" }),
+            border: `1px solid ${C.border2}`,
+          }}>
+            <div style={{ fontSize: "32px", marginBottom: "12px" }}>🎵</div>
+            <div style={{ fontFamily: FONT.ui, fontSize: "14px", fontWeight: 600, color: C.ink }}>No songs yet.</div>
+            {isOpen && (
+              <div style={{ fontFamily: FONT.body, fontSize: "12px", color: C.sub, marginTop: "6px" }}>
+                Be the first to add one!
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "28px" }}>
+            {room.submissions.map((sub, i) => {
+              const isMyVote1 = sub.my_vote === 1;
+              const isMyVoteN = sub.my_vote === -1;
+              const isMine    = sub.submitted_by?.trim().toLowerCase() === myName?.trim().toLowerCase();
+              const isLeader  = i === 0;
 
-                {/* Play */}
-                <button onClick={() => play(sub.track_id, sub.track_name, sub.artist_name)}
-                  style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none",
-                    background: playing === sub.track_id ? C.green : "#1a1a1a",
-                    color: playing === sub.track_id ? "#000" : C.muted,
-                    cursor: "pointer", fontSize: "10px", flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {playing === sub.track_id ? "■" : "▶"}
-                </button>
+              // Background: leader = amber wash; my upvote = amber wash; my downvote = red wash; else card
+              const rowBg      = isLeader ? AW : isMyVote1 ? AW : isMyVoteN ? C.redBg : C.card;
+              const rowBorder  = isLeader
+                ? `1.5px solid ${AC}`
+                : isMyVote1
+                  ? `1.5px solid ${AC}`
+                  : isMyVoteN
+                    ? `1.5px solid ${C.red}`
+                    : `1px solid ${C.line}`;
+              const rowShadow  = isLeader ? "0 12px 32px rgba(0,0,0,0.45)" : "none";
 
-                {/* Track info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    display: "flex", alignItems: "center", gap: "6px" }}>
-                    {sub.track_name}
-                    {!sub.vibe_ok && (
-                      <span title="Outside room vibe" style={{ fontSize: "11px",
-                        color: C.amber, flexShrink: 0 }}>⚠</span>
+              return (
+                <div key={sub.id} className={isLeader ? "lift" : ""} style={{
+                  display: "flex", flexDirection: "column", gap: "10px",
+                  padding: "14px 16px", borderRadius: "6px",
+                  background: rowBg, border: rowBorder, boxShadow: rowShadow,
+                  transition: "all 0.15s",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+
+                    {/* Rank */}
+                    <div style={{
+                      width: "22px", flexShrink: 0, textAlign: "center",
+                      fontFamily: FONT.mono, fontSize: i < 3 ? "13px" : "11px",
+                      fontWeight: 800, color: isLeader ? AC : C.faint,
+                    }}>
+                      {i < 3 ? ["01", "02", "03"][i] : String(i + 1).padStart(2, "0")}
+                    </div>
+
+                    {/* Album art */}
+                    {sub.album_image
+                      ? <img src={sub.album_image} alt="" style={{ width: "38px", height: "38px",
+                          borderRadius: "3px", flexShrink: 0, objectFit: "cover",
+                          border: `1px solid ${C.border}` }} />
+                      : <div style={{ width: "38px", height: "38px", borderRadius: "3px",
+                          background: C.border2, flexShrink: 0,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontFamily: FONT.mono, fontSize: "16px", color: C.muted }}>♪</div>}
+
+                    {/* Play button */}
+                    <button onClick={() => play(sub.track_id, sub.track_name, sub.artist_name)}
+                      style={{
+                        width: "30px", height: "30px", borderRadius: "4px",
+                        border: `1.5px solid ${playing === sub.track_id ? AC : C.border2}`,
+                        background: playing === sub.track_id ? AC : "transparent",
+                        color: playing === sub.track_id ? C.ink2 : C.ink,
+                        cursor: "pointer", fontSize: "10px", flexShrink: 0,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: FONT.mono,
+                      }}>
+                      {playing === sub.track_id ? "■" : "▶"}
+                    </button>
+
+                    {/* Track info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontFamily: FONT.ui, fontSize: "13px", fontWeight: 700, color: C.ink,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        display: "flex", alignItems: "center", gap: "6px",
+                      }}>
+                        {sub.track_name}
+                        {!sub.vibe_ok && (
+                          <span title="Outside room vibe" style={{
+                            fontFamily: FONT.mono, fontSize: "10px", fontWeight: 700,
+                            color: C.amber, flexShrink: 0, letterSpacing: "0.02em",
+                          }}>⚠</span>
+                        )}
+                      </div>
+                      <div style={{
+                        fontFamily: FONT.mono, fontSize: "11px", color: C.muted, marginTop: "2px",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {sub.artist_name}
+                        <span style={{ margin: "0 6px", color: C.border2 }}>·</span>
+                        added by{" "}
+                        <span style={{ color: isMine ? AC : C.sub, fontWeight: isMine ? 700 : 400 }}>
+                          {sub.submitted_by}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Vote counts */}
+                    <div style={{
+                      fontFamily: FONT.mono, fontSize: "11px", color: C.label,
+                      textAlign: "right", flexShrink: 0, lineHeight: 1.7,
+                    }}>
+                      <div style={{ color: AC }}>▲ {sub.upvotes}</div>
+                      <div style={{ color: C.red }}>▼ {sub.downvotes}</div>
+                    </div>
+
+                    {/* Score badge */}
+                    <ScoreBadge score={sub.score} />
+
+                    {/* Vote buttons */}
+                    {isOpen && (
+                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                        <button onClick={() => vote(sub.id, isMyVote1 ? 0 : 1)}
+                          disabled={isMine}
+                          style={{
+                            width: "30px", height: "30px", borderRadius: "4px",
+                            border: `1.5px solid ${isMyVote1 ? AC : C.border2}`,
+                            background: isMyVote1 ? AC : "transparent",
+                            color: isMyVote1 ? C.ink2 : C.muted,
+                            cursor: isMine ? "default" : "pointer",
+                            fontFamily: FONT.mono, fontSize: "12px",
+                          }}>
+                          ▲
+                        </button>
+                        <button onClick={() => vote(sub.id, isMyVoteN ? 0 : -1)}
+                          disabled={isMine}
+                          style={{
+                            width: "30px", height: "30px", borderRadius: "4px",
+                            border: `1.5px solid ${isMyVoteN ? C.red : C.border2}`,
+                            background: isMyVoteN ? C.red : "transparent",
+                            color: isMyVoteN ? C.ink2 : C.muted,
+                            cursor: isMine ? "default" : "pointer",
+                            fontFamily: FONT.mono, fontSize: "12px",
+                          }}>
+                          ▼
+                        </button>
+                      </div>
                     )}
+
+                    {/* Remove own + Spotify link */}
+                    <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                      {isMine && isOpen && (
+                        <button onClick={() => remove(sub.id)}
+                          title="Remove your submission"
+                          style={{
+                            width: "28px", height: "28px", borderRadius: "4px",
+                            border: `1px solid ${C.border2}`, background: "transparent",
+                            color: C.muted, cursor: "pointer", fontSize: "14px",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                          ×
+                        </button>
+                      )}
+                      <a href={sub.spotify_url} target="_blank" rel="noreferrer"
+                        style={{
+                          width: "28px", height: "28px", borderRadius: "4px",
+                          border: `1px solid ${C.border2}`, background: "transparent",
+                          color: C.sub, display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: "14px", textDecoration: "none", transition: "color 0.15s",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = AC}
+                        onMouseLeave={e => e.currentTarget.style.color = C.sub}>
+                        ↗
+                      </a>
+                    </div>
                   </div>
-                  <div style={{ fontSize: "11px", color: C.muted, marginTop: "1px",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {sub.artist_name}
-                    <span style={{ margin: "0 6px", color: C.label }}>·</span>
-                    added by{" "}
-                    <span style={{ color: isMine ? C.green : C.sub }}>
-                      {sub.submitted_by}
-                    </span>
+
+                  {/* Reactions — boxy mono tags */}
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", paddingLeft: "32px" }}>
+                    {REACTIONS.map((em) => {
+                      const rx  = (sub.reactions || []).find((x) => x.emoji === em);
+                      const cnt = rx?.count || 0;
+                      return (
+                        <button key={em} onClick={() => react(sub.id, em)}
+                          style={{
+                            padding: "4px 12px", borderRadius: "3px", cursor: "pointer",
+                            fontFamily: FONT.mono, fontSize: "12px", lineHeight: 1.5,
+                            background: rx?.mine ? AW : "transparent",
+                            border: `1.5px solid ${rx?.mine ? AC : C.border2}`,
+                            color: cnt > 0 ? C.ink : C.muted,
+                          }}>
+                          {em}{cnt > 0 ? ` ${cnt}` : ""}
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
 
-                {/* Vote counts */}
-                <div style={{ fontSize: "11px", color: C.label, textAlign: "right",
-                  flexShrink: 0, lineHeight: 1.6 }}>
-                  <div style={{ color: C.green }}>▲ {sub.upvotes}</div>
-                  <div style={{ color: C.red }}>▼ {sub.downvotes}</div>
-                </div>
-
-                {/* Score */}
-                <ScoreBadge score={sub.score} />
-
-                {/* Vote buttons */}
-                {isOpen && (
-                  <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                    <button onClick={() => vote(sub.id, isMyVote1 ? 0 : 1)}
-                      disabled={isMine}
-                      style={{ width: "30px", height: "30px", borderRadius: "7px",
-                        border: "none",
-                        background: isMyVote1 ? C.green : "#1a1a1a",
-                        color: isMyVote1 ? "#000" : C.muted,
-                        cursor: isMine ? "default" : "pointer", fontSize: "12px" }}>
-                      ▲
-                    </button>
-                    <button onClick={() => vote(sub.id, isMyVoteN ? 0 : -1)}
-                      disabled={isMine}
-                      style={{ width: "30px", height: "30px", borderRadius: "7px",
-                        border: "none",
-                        background: isMyVoteN ? C.red : "#1a1a1a",
-                        color: isMyVoteN ? "#fff" : C.muted,
-                        cursor: isMine ? "default" : "pointer", fontSize: "12px" }}>
-                      ▼
-                    </button>
-                  </div>
-                )}
-
-                {/* Remove own + Spotify link */}
-                <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-                  {isMine && isOpen && (
-                    <button onClick={() => remove(sub.id)}
-                      title="Remove your submission"
-                      style={{ width: "28px", height: "28px", borderRadius: "6px",
-                        border: "none", background: "transparent", color: C.label,
-                        cursor: "pointer", fontSize: "14px",
-                        display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      ×
-                    </button>
+                  {/* Leader bar (rank 1 only) */}
+                  {isLeader && (
+                    <div style={{ paddingLeft: "32px" }}>
+                      <div style={{ height: "3px", background: C.border2 }}>
+                        <div style={{ height: "3px", background: AC, width: "100%", transition: "width 0.6s" }} />
+                      </div>
+                    </div>
                   )}
-                  <a href={sub.spotify_url} target="_blank" rel="noreferrer"
-                    style={{ width: "28px", height: "28px", borderRadius: "6px",
-                      background: "transparent", color: C.border,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "14px", textDecoration: "none",
-                      transition: "color 0.15s" }}
-                    onMouseEnter={e => e.target.style.color = C.green}
-                    onMouseLeave={e => e.target.style.color = C.border}>
-                    ↗
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Finalize section ─────────────────────────────────────────────── */}
+        {room.status === "finalized" && room.playlist_url ? (
+          <div style={{
+            ...themeCard({ textAlign: "center", padding: "32px 24px" }),
+            border: `1px solid ${C.border2}`, boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+            background: AW,
+          }}>
+            <div style={{
+              fontFamily: FONT.display, fontSize: "22px", fontWeight: 800, color: AC, marginBottom: "8px",
+            }}>
+              ✓ Playlist created
+            </div>
+            <div style={{ fontFamily: FONT.body, fontSize: "13px", color: C.sub, marginBottom: "20px" }}>
+              {room.total_songs} songs, ready to play
+            </div>
+            <a href={room.playlist_url} target="_blank" rel="noreferrer"
+              style={{ ...themeBtn("primary"), display: "inline-flex", textDecoration: "none" }}>
+              Open in Spotify ↗
+            </a>
+          </div>
+        ) : isOwner ? (
+          <div style={{
+            ...themeCard(), border: `1px solid ${C.border2}`,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between",
+              alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
+              <div>
+                <div style={{ fontFamily: FONT.ui, fontSize: "14px", fontWeight: 700, color: C.ink, marginBottom: "4px" }}>
+                  Create Spotify Playlist
+                </div>
+                <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.sub }}>
+                  {eligible.length} songs with score ≥ {minScore} will be added
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.muted }}>Min score</span>
+                {[-1, 0, 1, 2, 3].map(s => (
+                  <button key={s} onClick={() => setMinScore(s)}
+                    style={{
+                      width: "30px", height: "30px", borderRadius: "4px",
+                      border: `1.5px solid ${minScore === s ? AC : C.border2}`,
+                      background: minScore === s ? AC : "transparent",
+                      color: minScore === s ? C.ink2 : C.muted,
+                      fontFamily: FONT.mono, fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                    }}>
+                    {s}
+                  </button>
+                ))}
+                {finResult?.success ? (
+                  <a href={finResult.playlist_url} target="_blank" rel="noreferrer"
+                    style={{ ...themeBtn("primary"), textDecoration: "none", whiteSpace: "nowrap" }}>
+                    Open in Spotify ↗
                   </a>
-                </div>
-                </div>
-
-                {/* Reactions */}
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", paddingLeft: "32px" }}>
-                  {REACTIONS.map((em) => {
-                    const rx = (sub.reactions || []).find((x) => x.emoji === em);
-                    const cnt = rx?.count || 0;
-                    return (
-                      <button key={em} onClick={() => react(sub.id, em)}
-                        style={{ padding: "3px 9px", borderRadius: "12px", cursor: "pointer",
-                          fontSize: "12px", lineHeight: 1.4,
-                          background: rx?.mine ? C.greenBg : "#151515",
-                          border: `1px solid ${rx?.mine ? C.greenBd : C.border}`,
-                          color: cnt > 0 ? "#fff" : C.muted }}>
-                        {em}{cnt > 0 ? ` ${cnt}` : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Finalize section ──────────────────────────────────────────────── */}
-      {room.status === "finalized" && room.playlist_url ? (
-        <div style={{ ...card({ background: C.greenBg, border: `1px solid ${C.greenBd}` }),
-          textAlign: "center" }}>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: C.green, marginBottom: "6px" }}>
-            ✓ Playlist created
-          </div>
-          <div style={{ fontSize: "13px", color: C.sub, marginBottom: "16px" }}>
-            {room.total_songs} songs, ready to play
-          </div>
-          <a href={room.playlist_url} target="_blank" rel="noreferrer"
-            style={{ ...btn("primary"), display: "inline-block", textDecoration: "none" }}>
-            Open in Spotify ↗
-          </a>
-        </div>
-      ) : isOwner ? (
-        <div style={{ ...card({ border: `1px solid ${C.greenBd}` }) }}>
-          <div style={{ display: "flex", justifyContent: "space-between",
-            alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff",
-                marginBottom: "4px" }}>
-                Create Spotify Playlist
-              </div>
-              <div style={{ fontSize: "12px", color: C.muted }}>
-                {eligible.length} songs with score ≥ {minScore} will be added
+                ) : (
+                  <button onClick={finalize}
+                    disabled={finalizing || eligible.length === 0}
+                    style={themeBtn("primary", {
+                      opacity: eligible.length === 0 ? 0.4 : 1,
+                      whiteSpace: "nowrap",
+                      cursor: eligible.length === 0 ? "default" : "pointer",
+                    })}>
+                    {finalizing ? "Creating..." : `Create (${eligible.length} songs)`}
+                  </button>
+                )}
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "6px", alignItems: "center",
-              flexWrap: "wrap" }}>
-              <span style={{ fontSize: "12px", color: C.muted }}>Min score</span>
-              {[-1, 0, 1, 2, 3].map(s => (
-                <button key={s} onClick={() => setMinScore(s)}
-                  style={{ width: "30px", height: "30px", borderRadius: "7px", border: "none",
-                    background: minScore === s ? C.green : "#1a1a1a",
-                    color: minScore === s ? "#000" : C.muted,
-                    fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
-                  {s}
-                </button>
-              ))}
-              {finResult?.success ? (
-                <a href={finResult.playlist_url} target="_blank" rel="noreferrer"
-                  style={{ ...btn("primary"), textDecoration: "none", whiteSpace: "nowrap" }}>
-                  Open in Spotify ↗
-                </a>
-              ) : (
-                <button onClick={finalize}
-                  disabled={finalizing || eligible.length === 0}
-                  style={btn("primary", {
-                    opacity: eligible.length === 0 ? 0.4 : 1,
-                    whiteSpace: "nowrap",
-                    cursor: eligible.length === 0 ? "default" : "pointer",
-                  })}>
-                  {finalizing ? "Creating..." : `Create (${eligible.length} songs)`}
-                </button>
-              )}
+            {finResult && !finResult.success && (
+              <div style={{ marginTop: "14px", fontFamily: FONT.mono, fontSize: "12px", color: C.red }}>
+                {finResult.message}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{
+            ...themeCard({ padding: "22px", textAlign: "center" }),
+            border: `1px solid ${C.border2}`,
+          }}>
+            <div style={{ fontFamily: FONT.body, fontSize: "13px", color: C.sub }}>
+              Waiting for{" "}
+              <span style={{ fontWeight: 700, color: C.ink }}>{room.owner}</span>
+              {" "}to finalize the playlist
             </div>
           </div>
-
-          {finResult && !finResult.success && (
-            <div style={{ marginTop: "12px", fontSize: "13px", color: C.red }}>
-              {finResult.message}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={{ ...card({ border: `1px solid ${C.border2}` }),
-          textAlign: "center", padding: "20px" }}>
-          <div style={{ fontSize: "13px", color: C.muted }}>
-            Waiting for <span style={{ color: "#fff" }}>{room.owner}</span> to finalize the playlist
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -716,25 +800,38 @@ function NamePrompt({ roomId, onJoin }) {
   const [name, setName] = useState("");
 
   return (
-    <div style={{ maxWidth: "400px", margin: "100px auto", padding: "0 24px" }}>
-      <div style={card()}>
-        <h2 style={{ margin: "0 0 4px", fontWeight: 800, fontSize: "18px" }}>
-          Joining <span style={{ color: C.green }}>{roomId}</span>
-        </h2>
-        <p style={{ margin: "0 0 20px", color: C.muted, fontSize: "13px" }}>
-          What should people see when you add songs?
-        </p>
-        <input value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && name.trim() && onJoin(name.trim())}
-          placeholder="Your name"
-          autoFocus
-          style={inp({ marginBottom: "14px" })} />
-        <button onClick={() => name.trim() && onJoin(name.trim())}
-          disabled={!name.trim()}
-          style={btn("primary", { width: "100%", padding: "12px",
-            opacity: name.trim() ? 1 : 0.4 })}>
-          Join Room →
-        </button>
+    <div style={{ background: PAGE_BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", "--accent": AC, "--accent-ink": AON, "--accent-wash": AW }}>
+      <div style={{ maxWidth: "400px", width: "100%", padding: "0 24px" }}>
+        <div style={{
+          ...themeCard({ padding: "32px 28px" }),
+          border: `1px solid ${C.border2}`, boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+        }}>
+          {/* Mini masthead kicker */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+            <span style={{ width: 10, height: 10, background: AC, flexShrink: 0 }} />
+            <div style={{ fontFamily: FONT.mono, fontSize: "10px", fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: "1.5px", color: AC }}>
+              Playlists · Collab
+            </div>
+          </div>
+          <h2 style={{ fontFamily: FONT.display, margin: "0 0 4px", fontWeight: 800, fontSize: "22px", color: C.ink }}>
+            Joining{" "}
+            <span style={{ color: AC }}>{roomId}</span>
+          </h2>
+          <p style={{ ...TYPE.body, margin: "0 0 24px", fontSize: "13px" }}>
+            What should people see when you add songs?
+          </p>
+          <input value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && name.trim() && onJoin(name.trim())}
+            placeholder="Your name"
+            autoFocus
+            style={themeInput({ width: "100%", marginBottom: "14px" })} />
+          <button onClick={() => name.trim() && onJoin(name.trim())}
+            disabled={!name.trim()}
+            style={themeBtn("primary", { width: "100%", padding: "13px", opacity: name.trim() ? 1 : 0.4 })}>
+            Join Room →
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -769,126 +866,133 @@ function CreateRoom({ onCreated, embedded = false }) {
   };
 
   return (
-    <div style={{ maxWidth: "560px", margin: "0 auto", padding: embedded ? "0 0 40px" : "40px 24px 100px" }}>
+    <div style={{ background: PAGE_BG, minHeight: embedded ? "auto" : "100vh", "--accent": AC, "--accent-ink": AON, "--accent-wash": AW }}>
+
+      {/* Shared masthead — only when not embedded */}
       {!embedded && (
-        <>
-          <h1 style={{ fontSize: "28px", fontWeight: 800, color: C.green, marginBottom: "6px" }}>
-            Collab Playlists
-          </h1>
-          <p style={{ color: C.muted, fontSize: "14px", marginBottom: "32px", margin: "0 0 32px" }}>
-            Everybody adds songs and votes. Top picks become a real Spotify playlist.
-          </p>
-        </>
+        <Masthead
+          no="05"
+          section="Playlists · Collab Room"
+          title="Collab Room"
+          lede={<>Everybody adds songs and votes. Top picks become a real Spotify playlist.</>}
+        />
       )}
 
-      {/* Your rooms */}
-      {myRooms.length > 0 && (
-        <div style={{ marginBottom: "28px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: C.label,
-            textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "10px" }}>
-            Your Rooms
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {myRooms.map(r => (
-              <div key={r.room_id}
-                style={{ ...card({ padding: "12px 16px" }),
-                  display: "flex", justifyContent: "space-between",
-                  alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff" }}>
-                    {r.room_name}
-                  </div>
-                  <div style={{ fontSize: "11px", color: C.muted, marginTop: "2px" }}>
-                    <span style={{ color: C.green, fontWeight: 600,
-                      letterSpacing: "1px" }}>{r.room_id}</span>
-                    {r.vibe_label && <span style={{ marginLeft: "8px" }}>{r.vibe_label}</span>}
-                  </div>
-                </div>
-                <button onClick={() => onCreated(r.room_id, r.my_name)}
-                  style={btn("ghost", { fontSize: "12px", padding: "6px 14px" })}>
-                  Rejoin →
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div style={{ maxWidth: "560px", margin: "0 auto", padding: embedded ? "0 0 40px" : "0 24px 100px" }}>
 
-      {/* New room form */}
-      <div style={card()}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff",
-          marginBottom: "18px" }}>New Room</div>
+        {/* Spacer from masthead */}
+        {!embedded && <div style={{ marginTop: 28 }} />}
 
-        <div style={{ marginBottom: "14px" }}>
-          <label style={{ display: "block", fontSize: "11px", color: C.label,
-            fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-            marginBottom: "6px" }}>Room Name</label>
-          <input value={roomName} onChange={e => setRoomName(e.target.value)}
-            placeholder="Road Trip 2026, Wedding Playlist..."
-            style={inp()} />
-        </div>
-
-        <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", fontSize: "11px", color: C.label,
-            fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-            marginBottom: "6px" }}>Your Name</label>
-          <input value={ownerName} onChange={e => setOwnerName(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && create()}
-            placeholder="How should you appear?"
-            style={inp()} />
-        </div>
-
-        {/* Vibe preset */}
-        <div style={{ marginBottom: "22px" }}>
-          <label style={{ display: "block", fontSize: "11px", color: C.label,
-            fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-            marginBottom: "10px" }}>
-            Vibe Guardrail <span style={{ color: C.muted, textTransform: "none",
-              fontWeight: 400 }}>(optional — flags songs that don't fit)</span>
-          </label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {VIBES.map(v => (
-              <button key={v.id} onClick={() => setVibe(vibe === v.id ? null : v.id)}
-                title={v.desc}
-                style={{ padding: "5px 12px", borderRadius: "16px", border: "1px solid",
-                  fontSize: "12px", fontWeight: 600, cursor: "pointer",
-                  transition: "all 0.15s",
-                  background: vibe === v.id ? C.green    : "#151515",
-                  color:      vibe === v.id ? "#000"     : C.muted,
-                  borderColor: vibe === v.id ? C.green   : C.border }}>
-                {v.label}
-              </button>
-            ))}
-          </div>
-          {vibe && (
-            <div style={{ marginTop: "8px", fontSize: "12px", color: C.sub }}>
-              {VIBES.find(v2 => v2.id === vibe)?.desc}
+        {/* Your rooms */}
+        {myRooms.length > 0 && (
+          <div style={{ marginBottom: "28px", marginTop: embedded ? 0 : 0 }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: "10px", fontWeight: 700, color: C.label,
+              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>
+              Your Rooms
             </div>
-          )}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {myRooms.map(r => (
+                <div key={r.room_id} style={{
+                  ...themeCard({ padding: "14px 16px" }),
+                  border: `1px solid ${C.border2}`,
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+                }}>
+                  <div>
+                    <div style={{ fontFamily: FONT.ui, fontSize: "14px", fontWeight: 700, color: C.ink }}>
+                      {r.room_name}
+                    </div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.muted, marginTop: "2px" }}>
+                      <span style={{ color: AC, fontWeight: 700, letterSpacing: "1px" }}>{r.room_id}</span>
+                      {r.vibe_label && <span style={{ marginLeft: "8px", color: C.sub }}>{r.vibe_label}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => onCreated(r.room_id, r.my_name)}
+                    style={themeBtn("ghost", { fontSize: "12px", padding: "6px 14px" })}>
+                    Rejoin →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* New room form */}
+        <div style={{
+          ...themeCard(), border: `1px solid ${C.border2}`,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+        }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: "10px", fontWeight: 700, color: C.label,
+            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "20px" }}>
+            New Room
+          </div>
+
+          <div style={{ marginBottom: "18px" }}>
+            <label style={{ display: "block", fontFamily: FONT.mono, fontSize: "10px", color: C.label,
+              fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "8px" }}>
+              Room Name
+            </label>
+            <input value={roomName} onChange={e => setRoomName(e.target.value)}
+              placeholder="Road Trip 2026, Wedding Playlist..."
+              style={themeInput({ width: "100%" })} />
+          </div>
+
+          <div style={{ marginBottom: "24px" }}>
+            <label style={{ display: "block", fontFamily: FONT.mono, fontSize: "10px", color: C.label,
+              fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "8px" }}>
+              Your Name
+            </label>
+            <input value={ownerName} onChange={e => setOwnerName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && create()}
+              placeholder="How should you appear?"
+              style={themeInput({ width: "100%" })} />
+          </div>
+
+          {/* Playlist theme — free text describing what this room is for */}
+          <div style={{ marginBottom: "28px" }}>
+            <label style={{ display: "block", fontFamily: FONT.mono, fontSize: "10px", color: C.label,
+              fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>
+              Playlist Theme{" "}
+              <span style={{ fontFamily: FONT.body, color: C.muted, textTransform: "none",
+                fontWeight: 400, fontSize: "11px" }}>
+                (optional — what kind of playlist is this?)
+              </span>
+            </label>
+            <div style={{ height: "1px", background: C.border2, marginBottom: "14px" }} />
+            <input value={vibe || ""} onChange={e => setVibe(e.target.value)}
+              placeholder="e.g. chill study beats, hype gym mix, road-trip sing-alongs"
+              style={themeInput({ width: "100%" })} />
+          </div>
+
+          <button onClick={create}
+            disabled={loading || !roomName.trim() || !ownerName.trim()}
+            style={themeBtn("primary", {
+              width: "100%", padding: "13px", fontSize: "14px",
+              opacity: (!roomName.trim() || !ownerName.trim()) ? 0.4 : 1,
+              cursor: (!roomName.trim() || !ownerName.trim()) ? "default" : "pointer",
+            })}>
+            {loading ? "Creating..." : "Create Room →"}
+          </button>
         </div>
 
-        <button onClick={create}
-          disabled={loading || !roomName.trim() || !ownerName.trim()}
-          style={btn("primary", { width: "100%", padding: "13px", fontSize: "14px",
-            opacity: (!roomName.trim() || !ownerName.trim()) ? 0.4 : 1,
-            cursor: (!roomName.trim() || !ownerName.trim()) ? "default" : "pointer" })}>
-          {loading ? "Creating..." : "Create Room →"}
-        </button>
-      </div>
-
-      {/* Join existing */}
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
-        <span style={{ color: C.label, fontSize: "13px" }}>Have a room code? </span>
-        <button onClick={() => {
-          const code = prompt("Enter room code:");
-          if (!code?.trim()) return;
-          const name = prompt("Your name:");
-          if (!name?.trim()) return;
-          onCreated(code.trim().toUpperCase(), name.trim());
-        }} style={{ background: "none", border: "none", color: C.green,
-          fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}>
-          Join existing room
-        </button>
+        {/* Join existing */}
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <span style={{ fontFamily: FONT.body, color: C.sub, fontSize: "13px" }}>Have a room code? </span>
+          <button onClick={() => {
+            const code = prompt("Enter room code:");
+            if (!code?.trim()) return;
+            const name = prompt("Your name:");
+            if (!name?.trim()) return;
+            onCreated(code.trim().toUpperCase(), name.trim());
+          }} style={{
+            background: "none", border: "none", color: AC,
+            fontSize: "13px", cursor: "pointer",
+            fontFamily: FONT.ui, fontWeight: 700,
+            textDecoration: "underline",
+          }}>
+            Join existing room
+          </button>
+        </div>
       </div>
     </div>
   );

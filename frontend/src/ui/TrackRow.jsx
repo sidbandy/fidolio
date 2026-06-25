@@ -1,16 +1,23 @@
 import { useState } from "react";
 import { C, FONT, moodColor, moodKey } from "../theme";
+import CoverThumb from "../components/CoverThumb";
 
-export function Badge({ children, color = C.muted }) {
+// Editorial micro-tag: mono, uppercase, ink outline (or solid for emphasis). No pills.
+export function Badge({ children, color = C.ink, solid = false }) {
   return (
     <span
       style={{
-        fontSize: 11,
-        color,
-        background: "#151515",
-        padding: "3px 8px",
-        borderRadius: 10,
+        fontFamily: FONT.mono,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
         whiteSpace: "nowrap",
+        padding: "2px 6px",
+        borderRadius: 3,
+        color: solid ? "#fff" : color,
+        background: solid ? color : "transparent",
+        border: `1px solid ${solid ? color : C.border2}`,
       }}
     >
       {children}
@@ -27,19 +34,19 @@ function MoodBadge({ mood, track, color }) {
     <span style={{ position: "relative", display: "inline-flex" }}>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        style={{ fontSize: 11, color, background: "#151515", padding: "3px 8px", borderRadius: 10, whiteSpace: "nowrap", border: "none", cursor: "pointer", fontFamily: FONT.body }}
+        style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: C.ink, background: "transparent", padding: "2px 7px", borderRadius: 3, whiteSpace: "nowrap", border: `1px solid ${C.border2}`, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}
       >
-        ● {mood}
+        <span style={{ color, fontSize: 12, lineHeight: 1 }}>●</span>{mood}
       </button>
       {open && (
         <>
           <div onClick={(e) => { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 1199 }} />
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 1200, width: 210, background: "#141414", border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px", boxShadow: "0 12px 36px rgba(0,0,0,0.6)", textAlign: "left" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color, marginBottom: 7 }}>{mood} — why</div>
-            <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.7 }}>
-              Mood <b style={{ color: "#fff" }}>{pct(track.valence)}</b> · Energy <b style={{ color: "#fff" }}>{pct(track.energy)}</b><br />
-              {track.tempo ? <>Tempo <b style={{ color: "#fff" }}>{Math.round(track.tempo)} BPM</b> · </> : null}
-              Acoustic <b style={{ color: "#fff" }}>{pct(track.acousticness)}</b> · Dance <b style={{ color: "#fff" }}>{pct(track.danceability)}</b>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 1200, width: 212, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "11px 13px", boxShadow: "3px 3px 0 rgba(22,17,24,0.18)", textAlign: "left" }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color, marginBottom: 7 }}>{mood} — why</div>
+            <div style={{ fontFamily: FONT.body, fontSize: 11.5, color: C.sub, lineHeight: 1.7 }}>
+              Mood <b style={{ color: C.ink }}>{pct(track.valence)}</b> · Energy <b style={{ color: C.ink }}>{pct(track.energy)}</b><br />
+              {track.tempo ? <>Tempo <b style={{ color: C.ink }}>{Math.round(track.tempo)} BPM</b> · </> : null}
+              Acoustic <b style={{ color: C.ink }}>{pct(track.acousticness)}</b> · Dance <b style={{ color: C.ink }}>{pct(track.danceability)}</b>
             </div>
           </div>
         </>
@@ -63,9 +70,9 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         alignItems: "center",
         gap: 12,
         padding: "10px 12px",
-        borderRadius: 10,
-        background: isPlaying ? C.greenBg : "transparent",
-        border: `1px solid ${isPlaying ? C.greenBd : "transparent"}`,
+        borderRadius: 5,
+        background: isPlaying ? C.accentWash : "transparent",
+        border: `1px solid ${isPlaying ? C.accent : "transparent"}`,
         transition: "all 0.15s",
       }}
     >
@@ -73,9 +80,9 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         <span
           style={{
             fontFamily: FONT.display,
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: 700,
-            color: isPlaying ? C.green : C.faint,
+            color: isPlaying ? C.ink : C.faint,
             width: 26,
             textAlign: "right",
             flexShrink: 0,
@@ -86,34 +93,21 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         </span>
       )}
 
-      <button
-        onClick={() => onPlay(track.id, track.name, track.artist)}
-        aria-label={isPlaying ? "Stop preview" : "Play preview"}
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: "50%",
-          border: "none",
-          cursor: "pointer",
-          flexShrink: 0,
-          fontSize: 11,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: isPlaying ? C.green : "#1a1a1a",
-          color: isPlaying ? "#000" : C.muted,
-          transition: "all 0.15s",
-        }}
-      >
-        {isPlaying ? "■" : "▶"}
-      </button>
+      <CoverThumb
+        album={track.album}
+        artist={track.artist}
+        size={42}
+        playing={isPlaying}
+        onClick={() => onPlay(track.id, track.name, track.artist, track)}
+      />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
+            fontFamily: FONT.ui,
             fontSize: 14,
             fontWeight: 600,
-            color: "#fff",
+            color: C.ink,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -123,6 +117,7 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
         </div>
         <div
           style={{
+            fontFamily: FONT.ui,
             fontSize: 12,
             color: C.sub,
             overflow: "hidden",
@@ -144,12 +139,18 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
           alignItems: "center",
         }}
       >
-        {note && <Badge color={C.green}>{note}</Badge>}
+        {note && (
+          <span style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: C.accentInk, background: C.accent, padding: "2px 6px", borderRadius: 3, whiteSpace: "nowrap" }}>{note}</span>
+        )}
         {track.release_year && <Badge>{track.release_year}</Badge>}
         {track.energy != null && <Badge>E {Math.round(track.energy * 100)}%</Badge>}
         {track.moods?.length
           ? track.moods.slice(0, 2).map((m) => <MoodBadge key={m} mood={m} track={track} color={mc} />)
-          : track.valence != null && <Badge color={mc}>● {moodKey(track.valence)}</Badge>}
+          : track.valence != null && (
+            <span style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: C.ink, border: `1px solid ${C.border2}`, padding: "2px 7px", borderRadius: 3, display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span style={{ color: mc, fontSize: 12, lineHeight: 1 }}>●</span>{moodKey(track.valence)}
+            </span>
+          )}
         {track.language && track.language !== "english" && (
           <Badge>{track.language}</Badge>
         )}
@@ -158,7 +159,7 @@ export default function TrackRow({ track, playing, onPlay, rank, note }) {
             href={track.spotify_url}
             target="_blank"
             rel="noreferrer"
-            style={{ fontSize: 12, color: C.green, textDecoration: "none" }}
+            style={{ fontSize: 14, color: C.ink, textDecoration: "none", fontWeight: 700 }}
           >
             ↗
           </a>

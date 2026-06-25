@@ -11,28 +11,28 @@ function CardFace({ card, drag }) {
   const x = drag;
   const removeOp = useTransform(x, [-120, -30], [1, 0]);
   const keepOp = useTransform(x, [30, 120], [0, 1]);
-  const tint = useTransform(x, [-160, 0, 160], ["rgba(239,68,68,0.16)", "rgba(255,255,255,0)", "rgba(29,185,84,0.16)"]);
+  const tint = useTransform(x, [-160, 0, 160], ["rgba(224,98,60,0.16)", "rgba(255,255,255,0)", "rgba(255,178,61,0.18)"]);
   return (
-    <motion.div style={{ position: "absolute", inset: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 18, padding: 24, display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 20px 50px rgba(0,0,0,0.5)", overflow: "hidden" }}>
+    <motion.div style={{ position: "absolute", inset: 0, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: 24, display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "6px 6px 0 rgba(22,17,24,0.18)", overflow: "hidden" }}>
       <motion.div style={{ position: "absolute", inset: 0, background: tint, pointerEvents: "none" }} />
-      {/* drag stamps */}
-      <motion.div style={{ opacity: removeOp, position: "absolute", top: 20, right: 20, color: C.red, border: `3px solid ${C.red}`, borderRadius: 8, padding: "4px 12px", fontFamily: FONT.display, fontWeight: 800, fontSize: 18, transform: "rotate(12deg)", letterSpacing: "1px" }}>REMOVE</motion.div>
-      <motion.div style={{ opacity: keepOp, position: "absolute", top: 20, left: 20, color: C.green, border: `3px solid ${C.green}`, borderRadius: 8, padding: "4px 12px", fontFamily: FONT.display, fontWeight: 800, fontSize: 18, transform: "rotate(-12deg)", letterSpacing: "1px" }}>KEEP</motion.div>
+      {/* drag stamps — bold filled stickers */}
+      <motion.div style={{ opacity: removeOp, position: "absolute", top: 20, right: 20, color: "#fff", background: C.red, border: `2.5px solid ${C.ink}`, borderRadius: 4, padding: "4px 12px", fontFamily: FONT.display, fontWeight: 800, fontSize: 18, transform: "rotate(11deg)", letterSpacing: "1px" }}>REMOVE</motion.div>
+      <motion.div style={{ opacity: keepOp, position: "absolute", top: 20, left: 20, color: C.ink2, background: C.green, border: `2.5px solid ${C.ink2}`, borderRadius: 4, padding: "4px 12px", fontFamily: FONT.display, fontWeight: 800, fontSize: 18, transform: "rotate(-11deg)", letterSpacing: "1px" }}>KEEP</motion.div>
 
       <div style={{ position: "relative", display: "flex", justifyContent: "center", padding: "8px 0 4px" }}>
         <button onClick={(e) => { e.stopPropagation(); play(card.id, card.title, card.sub); }}
-          style={{ width: 72, height: 72, borderRadius: "50%", border: "none", background: isPlaying ? C.green : "#1a1a1a", color: isPlaying ? "#000" : "#fff", cursor: "pointer", fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+          style={{ width: 72, height: 72, borderRadius: "50%", border: `1.5px solid ${C.ink}`, background: isPlaying ? C.green : "transparent", color: C.ink, cursor: "pointer", fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
           {isPlaying ? "■" : "▶"}
         </button>
       </div>
 
       <div style={{ position: "relative", textAlign: "center" }}>
-        <div style={{ fontFamily: FONT.display, fontSize: 22, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.title}</div>
-        <div style={{ fontSize: 14, color: C.sub, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.sub}</div>
+        <div style={{ fontFamily: FONT.display, fontSize: 22, fontWeight: 700, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.title}</div>
+        <div style={{ fontFamily: FONT.ui, fontSize: 14, color: C.sub, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.sub}</div>
         {card.meta && <div style={{ ...TYPE.micro, color: C.muted, marginTop: 12 }}>{card.meta}</div>}
       </div>
 
-      <div style={{ ...TYPE.micro, color: C.faint, textAlign: "center" }}>drag ← remove · keep →</div>
+      <div style={{ ...TYPE.micro, color: C.muted, textAlign: "center" }}>drag ← remove · keep →</div>
     </motion.div>
   );
 }
@@ -68,8 +68,8 @@ export default function SwipeDeck({ cards, onRemove, onKeep }) {
       <div style={{ ...TYPE.micro, color: C.muted, textAlign: "center", marginBottom: 16 }}>{i + 1} of {cards.length}</div>
       <div style={{ position: "relative", height: 300 }}>
         {cards[i + 1] && (
-          <div style={{ position: "absolute", inset: 0, transform: "scale(0.94) translateY(12px)", opacity: 0.45 }}>
-            <div style={{ position: "absolute", inset: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 18 }} />
+          <div style={{ position: "absolute", inset: 0, transform: "scale(0.94) translateY(12px)", opacity: 0.5 }}>
+            <div style={{ position: "absolute", inset: 0, background: C.card, border: `1.5px solid ${C.line}`, borderRadius: 6 }} />
           </div>
         )}
         <motion.div
@@ -90,8 +90,8 @@ export default function SwipeDeck({ cards, onRemove, onKeep }) {
         </motion.div>
       </div>
       <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
-        <button onClick={() => decide(false)} style={{ flex: 1, maxWidth: 160, padding: "12px", borderRadius: 12, border: `1px solid #3a1a1a`, background: C.redBg, color: C.red, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕ Remove</button>
-        <button onClick={() => decide(true)} style={{ flex: 1, maxWidth: 160, padding: "12px", borderRadius: 12, border: `1px solid ${C.greenBd}`, background: C.greenBg, color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>♥ Keep</button>
+        <button onClick={() => decide(false)} style={{ flex: 1, maxWidth: 160, padding: "12px", borderRadius: 4, border: `1.5px solid ${C.red}`, background: C.redBg, color: C.red, fontFamily: FONT.ui, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>✕ Remove</button>
+        <button onClick={() => decide(true)} style={{ flex: 1, maxWidth: 160, padding: "12px", borderRadius: 4, border: `1.5px solid ${C.ink}`, background: C.greenBg, color: C.ink, fontFamily: FONT.ui, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>♥ Keep</button>
       </div>
     </div>
   );

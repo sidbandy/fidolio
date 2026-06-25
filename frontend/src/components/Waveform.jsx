@@ -1,126 +1,120 @@
-import { useEffect, useRef } from "react";
-import { C, moodColor } from "../theme";
+import { useRef, useEffect } from "react";
 
-// Circular audio visualizer — the "old YouTube disco" ring: the whole ring PULSES
-// on the beat (bass-driven) while frequency peaks spike outward around it.
-//  • Bass (low bins) drives a snappy ring expansion → it beats, not just vibrates.
-//  • Spectrum peaks (power-curved, mirrored for symmetry) radiate as spikes.
-//  • Hue follows mood (valence); rotation + pulse speed follow tempo.
-//  • Idle = a still song-signature ring that breathes gently.
-function makeRng(seedStr) {
-  let h = 2166136261;
-  for (let i = 0; i < seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return () => {
-    h += 0x6d2b79f5; let t = h;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const clamp01 = (x) => Math.max(0, Math.min(1, x || 0));
-
-export default function Waveform({
-  size = 44, active = false, analyser = null,
-  features = null, seed = "x", valence = null, glow = true, color: colorProp = null,
-}) {
-  const canvasRef = useRef(null);
-  const rafRef = useRef(0);
-  const smoothRef = useRef(null);
-  const bassRef = useRef(0);
-
+// Bar visualizer with a glitchy Y2K render layer. Two honest modes:
+//
+//  • active + analyser — a 30s preview plays IN the browser, so this is REAL FFT.
+//    Log-spaced bins (balanced bass→treble), a gain-lift so quiet songs still move,
+//    and per-bar smoothing so loud songs don't strobe.
+//
+//  • otherwise — a Spotify track is playing in the Spotify app, which the browser
+//    cannot tap (and Spotify's audio-analysis API is retired). So this is a
+//    feature-shaped "spectrum": the SHAPE comes from the track's real audio features
+//    (energy / danceability / acousticness → how bass- vs treble-heavy it looks) and
+//    the MOTION is a beat that travels across the bars at the track's BPM. It reads as
+//    the song's character + groove rather than random unison bouncing.
+export default function Waveform({ analyser, features, color = "#BCC2CC", height = 38, active = false, bars = 40 }) {
+  const ref = useRef(null);
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = ref.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr; canvas.height = size * dpr;
     const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const N = bars;
+    const freq = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
 
     const f = features || {};
-    const energy = clamp01(f.energy ?? 0.5);
-    const tempo = f.tempo || 110;
-    const color = colorProp || (valence != null ? moodColor(valence) : C.green);
-    const cx = size / 2, cy = size / 2;
-    const baseR = size * 0.20;          // resting radius (room to pulse + spike)
-    const maxAmp = size * 0.27;         // spike height
-    const lineW = Math.max(1.4, size * 0.045);
+    const e = clamp(f.energy ?? 0.5);
+    const dance = clamp(f.danceability ?? 0.5);
+    const acou = clamp(f.acousticness ?? 0.4);
+    const tempo = Math.max(50, Math.min(200, f.tempo ?? 110));
 
-    let POINTS = Math.max(72, Math.floor(size * 1.7));
-    if (POINTS % 2) POINTS++;
-    const HALF = POINTS / 2;
+    const rnd = (i) => { const a = Math.sin(i * 12.9898 + 7.13) * 43758.5453; return a - Math.floor(a); };
+    const smooth = new Float32Array(N);
+    let raf, start = performance.now();
 
-    const rand = makeRng(seed + "|" + Math.round(energy * 100));
-    const idle = Array.from({ length: HALF + 1 }, () => Math.pow(rand(), 1.5));
-    if (!smoothRef.current || smoothRef.current.length !== POINTS) smoothRef.current = new Float32Array(POINTS);
-    const sm = smoothRef.current;
+    const resize = () => {
+      const w = canvas.clientWidth || 200;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
 
-    const freq = active && analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
-    let startT = null;
+    const draw = (now) => {
+      const w = canvas.clientWidth || 200;
+      const h = height;
+      const t = (now - start) / 1000;
+      ctx.clearRect(0, 0, w, h);
 
-    const render = (tms) => {
-      if (startT === null) startT = tms;
-      const t = (tms - startT) / 1000;
-      ctx.clearRect(0, 0, size, size);
+      // Attack/release: bars snap UP on a transient (a hit/beat) and fall back slowly.
+      // This asymmetry is what makes a spectrum read as locked to the music.
+      const shape = (i, target) => {
+        const a = target > smooth[i] ? 0.7 : 0.16; // fast attack, slow release
+        smooth[i] += (target - smooth[i]) * a;
+      };
 
-      // bass → beat pulse (the whole ring breathes on the kick)
-      let bass = 0;
-      const half = new Float32Array(HALF + 1);
-      if (active && freq) {
+      if (active && analyser) {
         analyser.getByteFrequencyData(freq);
-        let b = 0; for (let i = 0; i < 6; i++) b += freq[i]; bass = b / 6 / 255;
-        for (let i = 0; i <= HALF; i++) {
-          const bin = Math.floor(Math.pow(i / HALF, 1.5) * (freq.length * 0.62));
-          const v = freq[Math.min(bin, freq.length - 1)] / 255;
-          // floor the quiet bins to 0 (deep troughs) and amplify loud bins (high crests)
-          half[i] = Math.max(0, v - 0.08) * (1.5 + energy * 0.6);
+        const lo = 2, hi = Math.max(lo + 1, Math.floor(freq.length * 0.80));
+        for (let i = 0; i < N; i++) {
+          const idx = Math.floor(lo * Math.pow(hi / lo, i / (N - 1)));
+          let v = (freq[idx] || 0) / 255;
+          v = Math.pow(v, 0.72);                  // a touch more contrast so beats pop
+          shape(i, v);
         }
       } else {
-        for (let i = 0; i <= HALF; i++) {
-          half[i] = idle[i] * (0.45 + energy * 0.55) * (0.75 + 0.25 * Math.sin(t * 1.1 + i * 0.5));
+        const beats = t * (tempo / 60);
+        for (let i = 0; i < N; i++) {
+          const fb = i / (N - 1);                 // 0 = bass (left) … 1 = treble (right)
+          // spectral envelope from the song's character
+          const env = 0.18 + e * 0.34 + dance * (1 - fb) * 0.5 + (1 - acou) * fb * 0.55;
+          // a beat pulse that travels across the bars (bass leads, treble trails)
+          const phase = beats - fb * 1.4;
+          const pulse = Math.pow(Math.max(0, Math.cos((phase - Math.floor(phase)) * Math.PI * 2)), 3) * (0.4 + e * 0.6);
+          // per-bar shimmer so neighbours never move identically
+          const osc = 0.5 + 0.5 * Math.sin(i * 0.7 + t * (1.4 + e * 3) + rnd(i) * 6.28);
+          const target = Math.min(1, env * (0.4 + 0.5 * osc) + pulse * (1 - fb * 0.45));
+          shape(i, target);
         }
       }
-      bassRef.current += (bass - bassRef.current) * 0.5;        // snappy beat
-      const pulse = active ? bassRef.current * 0.75 : 0.06 + 0.05 * Math.sin(t * 1.3);
-      const effBase = baseR * (1 + pulse);
 
-      // ease each (mirrored) point toward its target — snappy so it jerks with the sound
-      for (let p = 0; p < POINTS; p++) {
-        const target = half[p <= HALF ? p : POINTS - p];
-        sm[p] += (target - sm[p]) * (active ? 0.6 : 0.12);
+      // occasional brief glitch (a few short bursts, not constant noise)
+      const g = Math.sin(t * 1.7) * Math.sin(t * 0.9 + 1.3) * Math.sin(t * 3.1);
+      const glitch = g > 0.82;
+      const shear = glitch ? (rnd(Math.floor(t * 20)) - 0.5) * 6 : 0;
+
+      const bw = w / N;
+      const paint = (col, dx, alphaMul) => {
+        for (let i = 0; i < N; i++) {
+          const bh = Math.max(1, smooth[i] * h * 0.92);
+          ctx.fillStyle = col;
+          ctx.globalAlpha = (0.42 + smooth[i] * 0.58) * alphaMul;
+          ctx.fillRect(i * bw + bw * 0.16 + dx, h - bh, bw * 0.68, bh);
+        }
+      };
+      // RGB-split ghosts during a glitch frame (cyan/magenta) under the main bars
+      if (glitch) {
+        paint("#23E0FF", -2.5 + shear, 0.5);
+        paint("#FF2E9C", 2.5 + shear, 0.5);
       }
+      paint(color, shear * 0.4, 1);
 
-      const rot = t * (active ? 0.2 + tempo / 700 : 0.1);
-
-      ctx.lineWidth = lineW;
-      ctx.lineJoin = "round"; ctx.lineCap = "round";
-      ctx.strokeStyle = color;
-      if (glow) { ctx.shadowColor = color; ctx.shadowBlur = active ? 11 + bassRef.current * 14 : 5; }
-      ctx.beginPath();
-      for (let p = 0; p <= POINTS; p++) {
-        const idx = p % POINTS;
-        const ang = (idx / POINTS) * Math.PI * 2 + rot;
-        const r = effBase + sm[idx] * maxAmp;
-        const x = cx + Math.cos(ang) * r;
-        const y = cy + Math.sin(ang) * r;
-        (p === 0 ? ctx.moveTo : ctx.lineTo).call(ctx, x, y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-
-      // bright pulsing core ring
-      ctx.globalAlpha = 0.18 + (active ? bassRef.current * 0.3 : 0);
-      ctx.beginPath();
-      ctx.arc(cx, cy, effBase * 0.55, 0, Math.PI * 2);
-      ctx.stroke();
+      // scanlines — thin dark rows, a little stronger during a glitch
+      ctx.globalAlpha = glitch ? 0.45 : 0.2;
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
       ctx.globalAlpha = 1;
-      ctx.shadowBlur = 0;
 
-      rafRef.current = requestAnimationFrame(render);
+      raf = requestAnimationFrame(draw);
     };
+    raf = requestAnimationFrame(draw);
 
-    rafRef.current = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [size, active, analyser, features, seed, valence, glow, colorProp]);
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [analyser, active, color, height, bars, features]);
 
-  return <canvas ref={canvasRef} style={{ width: size, height: size, display: "block" }} />;
+  return <canvas ref={ref} style={{ width: "100%", height, display: "block" }} />;
 }
+
+function clamp(x) { return Math.max(0, Math.min(1, x)); }

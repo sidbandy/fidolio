@@ -19,13 +19,13 @@ export default class ErrorBoundary extends Component {
       return (
         <div style={{ maxWidth: 560, margin: "100px auto", padding: 24, textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-          <div style={{ ...TYPE.title, color: "#fff", marginBottom: 10 }}>This page hit a snag</div>
+          <div style={{ ...TYPE.title, marginBottom: 10 }}>This page hit a snag</div>
           <p style={{ ...TYPE.body, marginBottom: 18 }}>
             {String(this.state.error?.message || this.state.error)}
           </p>
           <button
             onClick={() => this.setState({ error: null })}
-            style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: C.green, color: "#000", fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "11px 22px", borderRadius: 4, border: `1.5px solid ${C.ink}`, background: C.green, color: C.ink, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer" }}
           >
             Try again
           </button>

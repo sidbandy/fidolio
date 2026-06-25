@@ -4,26 +4,80 @@
   box-sizing: border-box;
 }
 
+:root {
+  --accent: #BCC2CC;
+  --accent-ink: #14161B;
+  --accent-wash: rgba(188, 194, 204, 0.16);
+}
+
+/* Blok — chunky display face (CC-BY, Tup Wanders). */
+@font-face {
+  font-family: 'Blok';
+  src: url('/Blok.ttf') format('truetype');
+  font-weight: 400 900;
+  font-display: swap;
+}
+
+/* Punk Kid — trial display face (1001Fonts FFC license). */
+@font-face {
+  font-family: 'Punk Kid';
+  src: url('/PunkKid.ttf') format('truetype');
+  font-display: swap;
+}
+
+/* Mexcellent — sidebar tab names. */
+@font-face {
+  font-family: 'Mexcellent';
+  src: url('/Mexcellent.otf') format('opentype');
+  font-display: swap;
+}
+
+/* Meloriac — page header titles. */
+@font-face {
+  font-family: 'Meloriac';
+  src: url('/Meloriac.ttf') format('truetype');
+  font-display: swap;
+}
+
 body {
-  background-color: #080808;
-  color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  background-color: #0B0C0F;
+  background-image: radial-gradient(135% 100% at 50% -12%, #15171D 0%, #0B0C0F 58%, #070809 100%);
+  background-attachment: fixed;
+  color: #F2F4F8;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Volcanic-rock grain — coarse, patchy texture over the whole UI (rough black "paper"). */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.13;
+  mix-blend-mode: overlay;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
 }
 
 .card {
-  background: #111;
-  border-radius: 16px;
+  background: linear-gradient(160deg, #262A33 0%, #1B1E25 55%, #21242C 100%);
+  border-radius: 6px;
   padding: 24px;
-  border: 1px solid #1a1a1a;
+  border: 1px solid rgba(233, 238, 247, 0.10);
+  box-shadow: inset 0 1px 0 rgba(245, 248, 255, 0.09);
 }
 
 .label {
   font-size: 11px;
-  color: #555;
+  color: #8A8F99;
   text-transform: uppercase;
   letter-spacing: 1.5px;
   font-weight: 600;
+  font-family: 'Space Mono', ui-monospace, monospace;
 }
 
 .loading {
@@ -31,25 +85,58 @@ body {
   align-items: center;
   justify-content: center;
   height: 60vh;
-  color: #555;
+  color: #71757E;
   font-size: 16px;
+  font-family: 'Space Mono', ui-monospace, monospace;
 }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #111; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::placeholder { color: #71757E; opacity: 1; }
+::selection { background: #1E6BFF; color: #FFFFFF; }
+
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-track { background: #121419; }
+::-webkit-scrollbar-thumb { background: rgba(233,238,247,0.16); border-radius: 0; border: 2px solid #121419; }
+::-webkit-scrollbar-thumb:hover { background: rgba(233,238,247,0.34); }
+
+/* Album-cover play/pause control. */
+.cover-btn { transition: transform 0.16s cubic-bezier(0.34, 1.4, 0.5, 1), box-shadow 0.16s ease; }
+.cover-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,0.5); }
+.cover-btn:active { transform: scale(0.97); }
+.cover-btn__veil { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,8,12,0.42); opacity: 0; transition: opacity 0.18s ease; }
+.cover-btn__icon { border-radius: 50%; background: rgba(8,10,14,0.62); border: 1.5px solid rgba(255,255,255,0.94); color: #fff; display: flex; align-items: center; justify-content: center; line-height: 1; transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, filter 0.18s ease; }
+/* default: hover darkens the cover and reveals the icon */
+.cover-btn--playing .cover-btn__veil { opacity: 0.6; }
+.cover-btn:hover .cover-btn__veil { opacity: 1; }
+/* persistent: cover stays bright, icon always visible (dimmer), hover brightens + glows it */
+.cover-btn--persistent .cover-btn__veil { opacity: 1; background: transparent; }
+.cover-btn--persistent .cover-btn__icon { background: rgba(8,10,14,0.5); }
+.cover-btn--persistent:hover .cover-btn__icon { background: rgba(26,32,44,0.78); border-color: #fff; filter: brightness(1.25); box-shadow: 0 0 22px rgba(255,255,255,0.85), 0 0 9px rgba(255,255,255,0.6); transform: scale(1.07); }
+
+/* Press + hover feedback on every button — the "movement". */
+button { transition: transform 0.13s cubic-bezier(0.34, 1.6, 0.5, 1), filter 0.16s ease, box-shadow 0.16s ease; }
+button:hover { filter: brightness(1.09); }
+button:active { transform: scale(0.95); }
+
+/* Shiny gold-jewelry sweep — for Play Next / In Library (and anything .gold-shine). */
+@keyframes goldShine { 0% { transform: translateX(-140%) skewX(-18deg); } 55%, 100% { transform: translateX(240%) skewX(-18deg); } }
+.gold-shine { position: relative; overflow: hidden; isolation: isolate; }
+.gold-shine::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 55%;
+  pointer-events: none; z-index: 1;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.8), transparent);
+  animation: goldShine 3.6s ease-in-out infinite;
+}
 
 /* Spine nav — inactive links brighten on hover (active links set color inline) */
-.spine-link { color: #888; transition: color 0.15s, opacity 0.15s; }
-.spine-link:hover { color: #fff; }
+.spine-link { color: #8A8F99; transition: color 0.15s, opacity 0.15s; }
+.spine-link:hover { color: #F2F4F8; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .fade-in { animation: fadeIn 0.2s ease both; }
 
-@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.rise-in { animation: riseIn 0.32s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.rise-in { animation: riseIn 0.4s cubic-bezier(0.22,1,0.36,1) both; }
 
-/* Now Playing: slow blurred album-art drift ("motion graphic") */
 @keyframes kenburns {
   0%   { transform: scale(1.05) translate(0, 0); }
   50%  { transform: scale(1.18) translate(-2%, -2%); }
@@ -57,6 +144,121 @@ body {
 }
 .kenburns { animation: kenburns 24s ease-in-out infinite; }
 
+/* ── Motion layer ─────────────────────────── */
+@keyframes popIn { 0% { opacity: 0; transform: scale(0.82) translateY(8px); } 60% { transform: scale(1.03) translateY(0); } 100% { opacity: 1; transform: scale(1); } }
+.pop-in { animation: popIn 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+@keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.floaty { animation: floaty 4.5s ease-in-out infinite; }
+
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+.spin-slow { animation: spinSlow 18s linear infinite; }
+
+/* Card / tile hover — a metallic lift. */
+.lift { transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.5, 1), box-shadow 0.2s ease, border-color 0.2s ease; }
+.lift:hover { transform: translateY(-4px); }
+
+/* Chrome sheen sweep — vertical, for the silver wordmark. */
+@keyframes sheen { 0% { background-position: 0 135%; } 100% { background-position: 0 -135%; } }
+.chrome-sheen { background-size: 100% 235%; animation: sheen 5.5s linear infinite; }
+
+/* Green disco-ball shimmer — facets crawl + green sweeps (the FIDOLIO logo). */
+@keyframes discoShimmer { 0% { background-position: 0 0, 0 0, 0 130%; } 100% { background-position: 16px 16px, -16px 16px, 0 -130%; } }
+.disco-shimmer { animation: discoShimmer 4.5s linear infinite; }
+
+/* Disco-ball icon — mirror facets drift (rotation feel, no microwaving) + glints twinkle. */
+@keyframes discoTurn { 0% { background-position: 0 0, 0 0, 0 0; } 100% { background-position: 14px 0, -14px 0, 14px 0; } }
+.disco-facets { animation: discoTurn 5s linear infinite; will-change: background-position; }
+@keyframes discoTwinkle { 0%, 100% { opacity: 0.15; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1.2); } }
+.disco-twinkle { animation: discoTwinkle 2.2s ease-in-out infinite; will-change: opacity, transform; pointer-events: none; }
+
+/* Equalizer bars — for the live preview visualizer. */
+@keyframes eqBar { 0%, 100% { transform: scaleY(0.22); } 50% { transform: scaleY(1); } }
+.eq-bar { transform-origin: bottom; animation: eqBar 0.9s ease-in-out infinite; }
+
+/* Sidebar EQ rail — thin bars pulse from the seam (replaces the divider line). */
+@keyframes eqRail { 0%, 100% { transform: scaleX(0.28); opacity: 0.4; } 50% { transform: scaleX(1); opacity: 1; } }
+.eq-rail { transform-origin: right; animation: eqRail 1.2s ease-in-out infinite; will-change: transform; }
+
+/* Spine nav — a clean, sharp sword-strike sheen sweeps the active band as you switch tabs.
+   The blade skews with travel direction: down-strike leans one way, up-strike the other. */
+@keyframes swordDown {
+  0%   { transform: translateX(-160%) skewX(-22deg); opacity: 0; }
+  14%  { opacity: 1; }
+  100% { transform: translateX(380%) skewX(-22deg); opacity: 0; }
+}
+@keyframes swordUp {
+  0%   { transform: translateX(-160%) skewX(22deg); opacity: 0; }
+  14%  { opacity: 1; }
+  100% { transform: translateX(380%) skewX(22deg); opacity: 0; }
+}
+.nav-sword {
+  position: absolute; top: -30%; bottom: -30%; left: 0; width: 26%;
+  pointer-events: none; mix-blend-mode: screen; opacity: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.05) 42%, #ffffff 50%, rgba(255,255,255,0.05) 58%, transparent 100%);
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.9));
+}
+.nav-sword-down { animation: swordDown 0.36s cubic-bezier(0.5,0,0.08,1) both; }
+.nav-sword-up   { animation: swordUp   0.36s cubic-bezier(0.5,0,0.08,1) both; }
+
+/* Glitch + scanline pop — fires on the active band each time you switch tabs. */
+@keyframes tabPop {
+  0%   { opacity: 0; transform: translateX(-3px); }
+  10%  { opacity: 0.95; transform: translateX(3px); }
+  25%  { opacity: 0.6;  transform: translateX(-2px); }
+  45%  { opacity: 0.85; transform: translateX(1px); }
+  70%  { opacity: 0.4;  transform: translateX(0); }
+  100% { opacity: 0;    transform: translateX(0); }
+}
+.tab-pop {
+  position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.26) 0 1px, transparent 1px 3px),
+    linear-gradient(90deg, rgba(31,208,255,0.5), transparent 18%, transparent 82%, rgba(255,46,156,0.5));
+  animation: tabPop 0.42s steps(9, end) both;
+}
+
+/* Sidebar tab names — a faint glow with an occasional brief RGB-split glitch. */
+@keyframes tabGlow {
+  0%, 90%, 100% { text-shadow: 0 0 7px rgba(255,255,255,0.22); }
+  92% { text-shadow: -1.6px 0 rgba(35,224,255,0.85), 1.6px 0 rgba(255,46,156,0.85), 0 0 7px rgba(255,255,255,0.32); }
+  95% { text-shadow: 1.6px 0 rgba(35,224,255,0.85), -1.6px 0 rgba(255,46,156,0.85), 0 0 7px rgba(255,255,255,0.32); }
+  97% { text-shadow: 0 0 7px rgba(255,255,255,0.22); }
+}
+.tab-glow { animation: tabGlow 5.5s ease-in-out infinite; }
+
+/* Spine nav rows — faint full-bleed wash on hover (sharp, no box). */
+.nav-row::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: rgba(255,255,255,0.05); opacity: 0; transition: opacity 0.16s ease;
+}
+.nav-row:hover::before { opacity: 1; }
+
+/* Jewel shimmer — a soft, blurred light glint that drifts across each masthead block.
+   Single feathered peak + blur + opacity fade = a smooth gleam with no hard banding. */
+@keyframes jewelSheen {
+  0%   { transform: translateX(-180%) skewX(-12deg); opacity: 0; }
+  18%  { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { transform: translateX(320%) skewX(-12deg); opacity: 0; }
+}
+.jewel-sheen { position: relative; }
+.jewel-sheen::after {
+  content: ""; position: absolute; top: -60%; bottom: -60%; left: 0; width: 55%;
+  pointer-events: none; z-index: 2; mix-blend-mode: screen;
+  background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.30) 50%, transparent 100%);
+  filter: blur(16px);
+  animation: jewelSheen 7.5s cubic-bezier(0.45,0,0.55,1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .fade-in, .rise-in, .kenburns { animation: none; }
+  .fade-in, .rise-in, .kenburns, .pop-in, .floaty, .spin-slow, .lift, .chrome-sheen, .eq-bar, .eq-rail, .disco-shimmer { animation: none; transition: none; }
+  .nav-sword-down, .nav-sword-up { animation: none; opacity: 0; }
+  .tab-pop { animation: none; opacity: 0; }
+  .tab-glow { animation: none; text-shadow: 0 0 6px rgba(255,255,255,0.2); }
+  .disco-facets, .disco-twinkle { animation: none; }
+  .jewel-sheen::after { animation: none; opacity: 0.18; }
+  .gold-shine::before { animation: none; opacity: 0.35; }
+  .lift:hover { transform: none; }
+  button:active { transform: none; }
 }

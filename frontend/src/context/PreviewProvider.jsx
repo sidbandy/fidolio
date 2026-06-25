@@ -24,8 +24,8 @@ export function PreviewProvider({ children }) {
         const AC = window.AudioContext || window.webkitAudioContext;
         ctxRef.current = new AC();
         analyserRef.current = ctxRef.current.createAnalyser();
-        analyserRef.current.fftSize = 256;            // more bins → more detail
-        analyserRef.current.smoothingTimeConstant = 0.5;  // less internal smoothing → snaps with the audio
+        analyserRef.current.fftSize = 512;             // more bins → finer detail across the spectrum
+        analyserRef.current.smoothingTimeConstant = 0.35; // low internal smoothing → raw transients; attack/release shapes the punch
         analyserRef.current.connect(ctxRef.current.destination);
       }
       if (ctxRef.current.state === "suspended") ctxRef.current.resume();
@@ -62,7 +62,7 @@ export function PreviewProvider({ children }) {
         audio.play().catch(() => {});
         audioRef.current = audio;
         setPlaying(trackId);
-        setCurrent({ id: trackId, name: trackName, artist, features });
+        setCurrent({ id: trackId, name: trackName, artist, features, album_art: data.album_art });
         force((n) => n + 1);   // expose the now-created analyser to consumers
       } else {
         window.open(`https://open.spotify.com/track/${trackId}`, "_blank");

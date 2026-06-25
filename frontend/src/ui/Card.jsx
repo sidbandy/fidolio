@@ -1,15 +1,11 @@
-import { C } from "../theme";
+import { card as cardBase } from "../theme";
 
+// Clean dark card with a glowing accent edge (see theme.card). `tint` overrides the
+// background; `style` overrides anything.
 export default function Card({ children, style, tint, ...rest }) {
   return (
     <div
-      style={{
-        background: tint || C.card,
-        border: `1px solid ${C.border}`,
-        borderRadius: 14,
-        padding: "20px 22px",
-        ...style,
-      }}
+      style={{ ...cardBase(), ...(tint ? { background: tint } : {}), ...style }}
       {...rest}
     >
       {children}

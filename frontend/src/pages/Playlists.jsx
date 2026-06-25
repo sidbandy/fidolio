@@ -3,62 +3,14 @@ import usePreview from "../hooks/usePreview";
 import useMediaQuery from "../hooks/useMediaQuery";
 import { MOBILE_Q } from "../components/Spine";
 import SwipeDeck from "../components/SwipeDeck";
+import { C, FONT, TYPE, SECTION, card, btn, pill, input } from "../theme";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// ─── Design tokens ───────────────────────────────────────────────────────────
-const C = {
-  bg:      "#080808",
-  card:    "#0e0e0e",
-  card2:   "#111111",
-  border:  "#1a1a1a",
-  border2: "#222222",
-  green:   "#1db954",
-  greenBg: "#0d2b18",
-  greenBd: "#1a4a2a",
-  amber:   "#f59e0b",
-  indigo:  "#6366f1",
-  red:     "#ef4444",
-  muted:   "#555555",
-  sub:     "#888888",
-  label:   "#444444",
-};
-
-const pill = (active, extra = {}) => ({
-  padding: "5px 13px", borderRadius: "20px", fontSize: "12px",
-  fontWeight: 600, cursor: "pointer", border: "1px solid",
-  transition: "all 0.15s", userSelect: "none",
-  background: active ? C.green   : "#151515",
-  color:      active ? "#000"    : C.muted,
-  borderColor: active ? C.green  : C.border,
-  ...extra,
-});
-
-const card = (extra = {}) => ({
-  background: C.card, border: `1px solid ${C.border}`,
-  borderRadius: "12px", padding: "18px 20px", ...extra,
-});
-
-const btn = (variant = "primary", extra = {}) => {
-  const base = { padding: "9px 18px", borderRadius: "9px", fontSize: "13px",
-    fontWeight: 700, cursor: "pointer", border: "none", transition: "all 0.15s" };
-  if (variant === "primary")
-    return { ...base, background: C.green, color: "#000", ...extra };
-  if (variant === "ghost")
-    return { ...base, background: "#151515", color: C.sub,
-             border: `1px solid ${C.border}`, ...extra };
-  if (variant === "danger")
-    return { ...base, background: "#1a0808", color: C.red,
-             border: `1px solid #3a1a1a`, ...extra };
-  return { ...base, ...extra };
-};
-
-const input = (extra = {}) => ({
-  background: "#111", border: `1px solid ${C.border}`,
-  borderRadius: "8px", padding: "8px 12px", color: "#fff",
-  fontSize: "13px", outline: "none", boxSizing: "border-box",
-  maxWidth: "100%", ...extra,
-});
+// Section 5 accent — royal purple (Playlists department; inherited by embedded Collab)
+const AC  = SECTION[5].color;
+const AW  = SECTION[5].wash;
+const AON = SECTION[5].on;
 
 // ─── Condition field definitions ─────────────────────────────────────────────
 const FIELDS = [
@@ -104,45 +56,33 @@ const defaultBetweenFor = (field) => {
   return [0, 1];
 };
 
-// ─── Quick presets ────────────────────────────────────────────────────────────
+// ─── Quick presets (used by the builder — kept for future preset UI) ─────────
+// eslint-disable-next-line no-unused-vars
 const PRESETS = [
-  { label: "All Bengali",      emoji: "🇧🇩",
-    conditions: [{ field: "language", op: "eq", value: "bengali" }] },
-  { label: "All Hindi",        emoji: "🇮🇳",
-    conditions: [{ field: "language", op: "eq", value: "hindi" }] },
-  { label: "Bangers",          emoji: "🔥",
-    conditions: [{ field: "energy", op: "gte", value: 0.82 },
-                 { field: "tempo",  op: "gte", value: 130 }] },
-  { label: "Sad Hours",        emoji: "🌧",
-    conditions: [{ field: "mood",   op: "eq",  value: "dark" },
-                 { field: "energy", op: "lte", value: 0.50 }] },
-  { label: "Good Vibes",       emoji: "☀️",
-    conditions: [{ field: "mood",   op: "eq",  value: "happy" }] },
-  { label: "Acoustic",         emoji: "🎸",
-    conditions: [{ field: "acousticness", op: "gte", value: 0.75 }] },
-  { label: "Dance Floor",      emoji: "🕺",
-    conditions: [{ field: "danceability", op: "gte", value: 0.80 },
-                 { field: "energy",       op: "gte", value: 0.75 }] },
-  { label: "2010s Nostalgia",  emoji: "📼",
-    conditions: [{ field: "decade", op: "eq", value: "2010s" }] },
-  { label: "Gym / Run",        emoji: "🏋️",
-    conditions: [{ field: "energy", op: "gte", value: 0.87 },
-                 { field: "tempo",  op: "gte", value: 138 }] },
-  { label: "New Saves",        emoji: "✨",
-    conditions: [{ field: "saved_days", op: "lte", value: 30 }] },
-  { label: "Late Night",       emoji: "🌙",
-    conditions: [{ field: "energy",  op: "lte", value: 0.55 },
-                 { field: "valence", op: "lte", value: 0.45 }] },
-  { label: "Deep Focus",       emoji: "🎧",
-    conditions: [{ field: "energy",       op: "lte", value: 0.45 },
-                 { field: "acousticness", op: "gte", value: 0.55 }] },
-  { label: "Slow & Mellow",    emoji: "🕯",
-    conditions: [{ field: "tempo",  op: "lte", value: 90 },
-                 { field: "energy", op: "lte", value: 0.50 }] },
+  { label: "All Bengali",      conditions: [{ field: "language", op: "eq", value: "bengali" }] },
+  { label: "All Hindi",        conditions: [{ field: "language", op: "eq", value: "hindi" }] },
+  { label: "Bangers",          conditions: [{ field: "energy", op: "gte", value: 0.82 },
+                                             { field: "tempo",  op: "gte", value: 130 }] },
+  { label: "Sad Hours",        conditions: [{ field: "mood",   op: "eq",  value: "dark" },
+                                             { field: "energy", op: "lte", value: 0.50 }] },
+  { label: "Good Vibes",       conditions: [{ field: "mood",   op: "eq",  value: "happy" }] },
+  { label: "Acoustic",         conditions: [{ field: "acousticness", op: "gte", value: 0.75 }] },
+  { label: "Dance Floor",      conditions: [{ field: "danceability", op: "gte", value: 0.80 },
+                                             { field: "energy",       op: "gte", value: 0.75 }] },
+  { label: "2010s Nostalgia",  conditions: [{ field: "decade", op: "eq", value: "2010s" }] },
+  { label: "Gym / Run",        conditions: [{ field: "energy", op: "gte", value: 0.87 },
+                                             { field: "tempo",  op: "gte", value: 138 }] },
+  { label: "New Saves",        conditions: [{ field: "saved_days", op: "lte", value: 30 }] },
+  { label: "Late Night",       conditions: [{ field: "energy",  op: "lte", value: 0.55 },
+                                             { field: "valence", op: "lte", value: 0.45 }] },
+  { label: "Deep Focus",       conditions: [{ field: "energy",       op: "lte", value: 0.45 },
+                                             { field: "acousticness", op: "gte", value: 0.55 }] },
+  { label: "Slow & Mellow",    conditions: [{ field: "tempo",  op: "lte", value: 90 },
+                                             { field: "energy", op: "lte", value: 0.50 }] },
 ];
 
 // ─── Mood colour ─────────────────────────────────────────────────────────────
-const moodColor = (v) => v >= 0.6 ? C.green : v <= 0.35 ? C.indigo : C.amber;
+const moodColor = (v) => v >= 0.6 ? AC : v <= 0.35 ? C.indigo : C.amber;
 
 // ─── Condition row component ─────────────────────────────────────────────────
 function ConditionRow({ cond, onChange, onRemove, isExclude }) {
@@ -150,17 +90,18 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
   const ops      = OPS_FOR[fieldDef.type] || OPS_FOR.text;
   const isBetween = cond.op === "between";
 
-  const accentColor = isExclude ? C.red : C.green;
+  const accentColor = isExclude ? C.red : AC;
 
   return (
     <div style={{ display: "flex", gap: "8px", alignItems: "center",
       flexWrap: "wrap", padding: "10px 12px", background: C.card2,
-      borderRadius: "9px", border: `1px solid ${C.border}`,
+      borderRadius: "4px", border: `1.5px solid ${C.border2}`,
       boxSizing: "border-box", maxWidth: "100%" }}>
 
       {/* Exclude / include indicator */}
-      <span style={{ fontSize: "11px", fontWeight: 700,
-        color: accentColor, flexShrink: 0, minWidth: "32px" }}>
+      <span style={{ fontFamily: FONT.mono, fontSize: "11px", fontWeight: 700,
+        color: accentColor, flexShrink: 0, minWidth: "32px",
+        textTransform: "uppercase", letterSpacing: "1px" }}>
         {isExclude ? "NOT" : "IF"}
       </span>
 
@@ -207,7 +148,7 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
           <input type="number" value={cond.value} min={1} max={365}
             onChange={e => onChange({ ...cond, value: parseInt(e.target.value) || 30 })}
             style={{ ...input(), width: "70px" }} />
-          <span style={{ color: C.muted, fontSize: "12px" }}>days</span>
+          <span style={{ color: C.sub, fontSize: "12px", fontFamily: FONT.mono }}>days</span>
         </div>
       ) : isBetween ? (
         <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
@@ -220,7 +161,7 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
               onChange({ ...cond, value: arr });
             }}
             style={{ ...input(), width: "70px" }} />
-          <span style={{ color: C.muted, fontSize: "12px" }}>–</span>
+          <span style={{ color: C.sub, fontSize: "12px" }}>–</span>
           <input type="number"
             value={Array.isArray(cond.value) ? cond.value[1] : 1}
             step={fieldDef.step || 1}
@@ -247,7 +188,7 @@ function ConditionRow({ cond, onChange, onRemove, isExclude }) {
             <input type="range" min={0} max={1} step={0.05}
               value={cond.value}
               onChange={e => onChange({ ...cond, value: parseFloat(e.target.value) })}
-              style={{ flex: 1, accentColor: C.green }} />
+              style={{ flex: 1, accentColor: AC }} />
           )}
         </div>
       )}
@@ -268,64 +209,73 @@ function TrackRow({ track, playing, onPlay }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "12px",
-      padding: "9px 14px", borderRadius: "8px",
-      background: isPlaying ? C.greenBg : "transparent",
-      border: `1px solid ${isPlaying ? C.greenBd : "transparent"}`,
+      padding: "9px 14px", borderRadius: "4px",
+      background: isPlaying ? AW : "transparent",
+      border: `1.5px solid ${isPlaying ? AC : "transparent"}`,
       transition: "all 0.15s" }}>
 
       <button onClick={() => onPlay(track.id, track.name, track.artist)}
-        style={{ width: "30px", height: "30px", borderRadius: "50%",
-          border: "none", cursor: "pointer", flexShrink: 0, fontSize: "11px",
-          background: isPlaying ? C.green : "#1a1a1a",
-          color: isPlaying ? "#000" : C.muted }}>
+        style={{ width: "30px", height: "30px", borderRadius: "4px",
+          border: `1.5px solid ${isPlaying ? AC : C.border2}`, cursor: "pointer",
+          flexShrink: 0, fontSize: "11px",
+          background: isPlaying ? AC : C.card2,
+          color: isPlaying ? C.white : C.sub }}>
         {isPlaying ? "■" : "▶"}
       </button>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff",
+        <div style={{ fontSize: "13px", fontWeight: 600, color: C.ink,
+          fontFamily: FONT.ui,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {track.name}
         </div>
-        <div style={{ fontSize: "12px", color: C.sub,
+        <div style={{ fontSize: "12px", color: C.sub, fontFamily: FONT.ui,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {track.artist}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "6px", flexShrink: 0, flexWrap: "wrap",
+      <div style={{ display: "flex", gap: "5px", flexShrink: 0, flexWrap: "wrap",
         justifyContent: "flex-end" }}>
         {track.release_year && (
-          <span style={{ fontSize: "11px", color: C.muted,
-            background: "#151515", padding: "2px 7px", borderRadius: "10px" }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: "10.5px", color: C.sub,
+            background: C.card2, padding: "2px 7px",
+            border: `1px solid ${C.border2}`, borderRadius: "3px" }}>
             {track.release_year}
           </span>
         )}
         {track.tempo && (
-          <span style={{ fontSize: "11px", color: C.muted,
-            background: "#151515", padding: "2px 7px", borderRadius: "10px" }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: "10.5px", color: C.sub,
+            background: C.card2, padding: "2px 7px",
+            border: `1px solid ${C.border2}`, borderRadius: "3px" }}>
             {Math.round(track.tempo)} BPM
           </span>
         )}
         {track.energy != null && (
-          <span style={{ fontSize: "11px", color: C.muted,
-            background: "#151515", padding: "2px 7px", borderRadius: "10px" }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: "10.5px", color: C.sub,
+            background: C.card2, padding: "2px 7px",
+            border: `1px solid ${C.border2}`, borderRadius: "3px" }}>
             E {Math.round(track.energy * 100)}%
           </span>
         )}
         {track.valence != null && (
-          <span style={{ fontSize: "11px", color: mc,
-            background: "#151515", padding: "2px 7px", borderRadius: "10px" }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: "10.5px",
+            background: C.card2, padding: "2px 7px",
+            border: `1px solid ${C.border2}`, borderRadius: "3px",
+            color: mc }}>
             ● {v >= 0.6 ? "happy" : v <= 0.35 ? "dark" : "neutral"}
           </span>
         )}
         {track.language && track.language !== "english" && (
-          <span style={{ fontSize: "11px", color: C.amber,
-            background: "#1a1505", padding: "2px 7px", borderRadius: "10px" }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: "10.5px", color: C.brown,
+            background: C.amberBg, padding: "2px 7px",
+            border: `1px solid ${C.amber}55`, borderRadius: "3px" }}>
             {track.language}
           </span>
         )}
         <a href={track.spotify_url} target="_blank" rel="noreferrer"
-          style={{ fontSize: "11px", color: C.green, textDecoration: "none" }}>↗</a>
+          style={{ fontFamily: FONT.mono, fontSize: "11px", color: AC,
+            textDecoration: "none" }}>↗</a>
       </div>
     </div>
   );
@@ -350,14 +300,17 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
     : (isEdit ? "Update & Sync" : "Save & Sync");
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+    <div style={{ position: "fixed", inset: 0,
+      background: "rgba(22,17,24,0.55)",
       zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ ...card(), width: "440px", maxWidth: "95vw",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+        border: `1.5px solid ${C.ink}`,
+        boxShadow: "6px 6px 0 rgba(22,17,24,0.18)" }}>
 
         <div style={{ display: "flex", justifyContent: "space-between",
           alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800,
+            fontFamily: FONT.display, color: C.ink }}>
             {isEdit ? "Update Rule" : "Save Playlist"}
           </h3>
           <button onClick={onClose}
@@ -367,36 +320,36 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
 
         {stats && (
           <div style={{ display: "flex", gap: "12px", marginBottom: "18px",
-            padding: "10px 14px", background: C.card2, borderRadius: "9px",
-            border: `1px solid ${C.border}` }}>
-            <span style={{ fontSize: "12px", color: C.sub }}>
-              <span style={{ color: "#fff", fontWeight: 700 }}>{stats.count}</span> tracks
+            padding: "10px 14px", background: C.card2,
+            border: `1.5px solid ${C.border2}`, borderRadius: "4px" }}>
+            <span style={{ fontFamily: FONT.mono, fontSize: "12px", color: C.sub }}>
+              <span style={{ color: C.ink, fontWeight: 700 }}>{stats.count}</span> tracks
             </span>
-            {stats.avg_tempo && <span style={{ fontSize: "12px", color: C.sub }}>
-              <span style={{ color: "#fff", fontWeight: 700 }}>{Math.round(stats.avg_tempo)}</span> avg BPM
+            {stats.avg_tempo && <span style={{ fontFamily: FONT.mono, fontSize: "12px", color: C.sub }}>
+              <span style={{ color: C.ink, fontWeight: 700 }}>{Math.round(stats.avg_tempo)}</span> avg BPM
             </span>}
-            {stats.avg_energy && <span style={{ fontSize: "12px", color: C.sub }}>
-              <span style={{ color: "#fff", fontWeight: 700 }}>{Math.round(stats.avg_energy * 100)}%</span> energy
+            {stats.avg_energy && <span style={{ fontFamily: FONT.mono, fontSize: "12px", color: C.sub }}>
+              <span style={{ color: C.ink, fontWeight: 700 }}>{Math.round(stats.avg_energy * 100)}%</span> energy
             </span>}
           </div>
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "11px", color: C.label,
-              fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-              marginBottom: "6px" }}>Rule name</label>
+            <label style={{ display: "block", fontFamily: FONT.mono, fontSize: "11px",
+              color: C.label, fontWeight: 600, textTransform: "uppercase",
+              letterSpacing: "1.2px", marginBottom: "6px" }}>Rule name</label>
             <input value={form.name} placeholder="Bengali Vibes, Late Night Drive..."
               onChange={e => set("name", e.target.value)}
               style={{ ...input(), width: "100%", boxSizing: "border-box" }} />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "11px", color: C.label,
-              fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px",
-              marginBottom: "6px" }}>Spotify playlist</label>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              {[["new","Create new"],["existing","Link existing"],["none","Save rule only"]].map(([v, l]) => (
+            <label style={{ display: "block", fontFamily: FONT.mono, fontSize: "11px",
+              color: C.label, fontWeight: 600, textTransform: "uppercase",
+              letterSpacing: "1.2px", marginBottom: "6px" }}>Spotify playlist</label>
+            <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
+              {[["new","Create new"],["existing","Link existing"],["none","Rule only"]].map(([v, l]) => (
                 <button key={v} onClick={() => set("mode", v)}
                   style={pill(form.mode === v, { fontSize: "11px" })}>
                   {l}
@@ -422,14 +375,15 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
           </div>
 
           {form.mode !== "none" && (
-            <div style={{ padding: "14px", background: C.card2, borderRadius: "9px",
-              border: `1px solid ${C.border}` }}>
+            <div style={{ padding: "14px", background: C.card2,
+              border: `1.5px solid ${C.border2}`, borderRadius: "4px" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "10px",
                 cursor: "pointer", marginBottom: form.rotation_enabled ? "12px" : 0 }}>
                 <input type="checkbox" checked={form.rotation_enabled}
                   onChange={e => set("rotation_enabled", e.target.checked)}
-                  style={{ accentColor: C.green, width: "14px", height: "14px" }} />
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>
+                  style={{ accentColor: AC, width: "14px", height: "14px" }} />
+                <span style={{ fontFamily: FONT.ui, fontSize: "13px",
+                  fontWeight: 600, color: C.ink }}>
                   Enable auto-rotation
                 </span>
               </label>
@@ -437,7 +391,8 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
               {form.rotation_enabled && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <label style={{ fontSize: "12px", color: C.sub, minWidth: "100px" }}>
+                    <label style={{ fontFamily: FONT.mono, fontSize: "12px",
+                      color: C.sub, minWidth: "100px" }}>
                       Swap out
                     </label>
                     <select value={form.rotation_size}
@@ -449,7 +404,8 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
                     </select>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <label style={{ fontSize: "12px", color: C.sub, minWidth: "100px" }}>
+                    <label style={{ fontFamily: FONT.mono, fontSize: "12px",
+                      color: C.sub, minWidth: "100px" }}>
                       Pull from
                     </label>
                     <select value={form.rotation_source}
@@ -460,7 +416,8 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
                       <option value="discover">Discover (ReccoBeats recs)</option>
                     </select>
                   </div>
-                  <p style={{ margin: 0, fontSize: "11px", color: C.muted, lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, fontFamily: FONT.body, fontSize: "11px",
+                    color: C.muted, lineHeight: 1.5 }}>
                     {form.rotation_source === "library" && "Pulls fresh tracks matching your rule that aren't already in the playlist."}
                     {form.rotation_source === "similar" && "Finds artists similar to those in your playlist (via Last.fm) and picks their tracks from your library."}
                     {form.rotation_source === "discover" && "Uses ReccoBeats to find tracks that fit the playlist's sound, including ones not in your library yet."}
@@ -476,7 +433,9 @@ function SaveModal({ stats, onSave, onClose, saving, editTarget }) {
           <button onClick={onClose} style={btn("ghost")}>Cancel</button>
           <button disabled={saving || !form.name.trim()}
             onClick={() => onSave(form)}
-            style={btn("primary", { opacity: saving || !form.name.trim() ? 0.5 : 1 })}>
+            style={btn("primary", {
+              background: AC, color: C.white, borderColor: AC,
+              opacity: saving || !form.name.trim() ? 0.5 : 1 })}>
             {saving ? "Saving..." : saveLabel}
           </button>
         </div>
@@ -562,24 +521,27 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, onSaved, syncing, r
   ];
 
   return (
-    <div style={{ ...card(), position: "relative" }}>
+    <div className="lift" style={{ ...card(), border: `1.5px solid ${C.ink}`,
+      boxShadow: "4px 4px 0 rgba(22,17,24,0.10)", position: "relative" }}>
 
       <div style={{ display: "flex", justifyContent: "space-between",
         alignItems: "flex-start", marginBottom: "10px" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ fontSize: "15px", fontWeight: 800, color: "#fff" }}>{pl.name}</div>
+            <div style={{ fontFamily: FONT.display, fontSize: "15px",
+              fontWeight: 800, color: C.ink }}>{pl.name}</div>
             {rotStatus && (
               <span style={{
                 width: "7px", height: "7px", borderRadius: "50%", display: "inline-block",
-                background: rotStatus.due ? C.amber : C.green,
-                boxShadow: rotStatus.due ? `0 0 6px ${C.amber}` : "none", flexShrink: 0,
+                background: rotStatus.due ? C.amber : AC,
+                flexShrink: 0,
               }} title={rotStatus.text} />
             )}
           </div>
           {pl.spotify_playlist_url && (
             <a href={pl.spotify_playlist_url} target="_blank" rel="noreferrer"
-              style={{ fontSize: "11px", color: C.green, textDecoration: "none" }}>
+              style={{ fontFamily: FONT.mono, fontSize: "11px",
+                color: AC, textDecoration: "none" }}>
               Open in Spotify ↗
             </a>
           )}
@@ -598,7 +560,7 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, onSaved, syncing, r
                 style={btn(rotStatus?.due ? "primary" : "ghost", {
                   fontSize: "11px", padding: "5px 10px",
                   opacity: rotating === pl.id ? 0.5 : 1,
-                  ...(rotStatus?.due ? { boxShadow: `0 0 10px ${C.green}55` } : {}),
+                  ...(rotStatus?.due ? { background: AC, color: C.white, borderColor: AC } : {}),
                 })}>
                 {rotating === pl.id ? "Rotating..." : `↻ Rotate${rotStatus?.due ? " (due)" : ""}`}
               </button>
@@ -609,16 +571,20 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, onSaved, syncing, r
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "10px" }}>
         {conds.map((c, i) => (
-          <span key={i} style={{ fontSize: "11px", color: C.sub, background: "#151515",
-            padding: "3px 9px", borderRadius: "10px", border: `1px solid ${C.border}` }}>
+          <span key={i} style={{ fontFamily: FONT.mono, fontSize: "10.5px",
+            color: C.ink, background: AW,
+            padding: "3px 9px", borderRadius: "3px",
+            border: `1px solid ${AC}44` }}>
             {condLabel(c)}
           </span>
         ))}
         {excls.map((c, i) => (
-          <span key={i} style={{ fontSize: "11px", color: C.red, background: "#1a0808",
-            padding: "3px 9px", borderRadius: "10px", border: "1px solid #3a1a1a" }}>
+          <span key={i} style={{ fontFamily: FONT.mono, fontSize: "10.5px",
+            color: C.red, background: C.redBg,
+            padding: "3px 9px", borderRadius: "3px",
+            border: `1px solid ${C.red}44` }}>
             ✕ {condLabel(c)}
           </span>
         ))}
@@ -626,79 +592,96 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, onSaved, syncing, r
 
       <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "center" }}>
         {rotStatus ? (
-          <span style={{ fontSize: "11px", color: rotStatus.due ? C.amber : C.green, fontWeight: 600 }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: "11px",
+            color: rotStatus.due ? C.amber : AC, fontWeight: 600 }}>
             ↻ {rotStatus.text}
           </span>
         ) : pl.rotation_enabled ? (
-          <span style={{ fontSize: "11px", color: C.green }}>↻ Auto-rotation on</span>
+          <span style={{ fontFamily: FONT.mono, fontSize: "11px", color: AC }}>↻ Auto-rotation on</span>
         ) : null}
         {pl.last_synced_at && (
-          <span style={{ fontSize: "11px", color: C.muted }}>Synced {pl.last_synced_at}</span>
+          <span style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.muted }}>
+            Synced {pl.last_synced_at}
+          </span>
         )}
         {pl.last_rotated_at && (
-          <span style={{ fontSize: "11px", color: C.muted }}>Last rotated {pl.last_rotated_at}</span>
+          <span style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.muted }}>
+            Last rotated {pl.last_rotated_at}
+          </span>
         )}
-        <span style={{ fontSize: "11px", color: C.label }}>Created {pl.created_at}</span>
+        <span style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.label }}>
+          Created {pl.created_at}
+        </span>
         {pl.rotation_enabled && pl.spotify_playlist_id && (
           <button onClick={() => setShowRotSettings(v => !v)}
             style={{ background: "none", border: "none", cursor: "pointer",
-              fontSize: "11px", color: C.muted, marginLeft: "auto",
-              padding: 0, textDecoration: "underline" }}>
+              fontFamily: FONT.mono, fontSize: "11px", color: C.sub,
+              marginLeft: "auto", padding: 0, textDecoration: "underline" }}>
             {showRotSettings ? "Hide settings" : "⚙ Rotation settings"}
           </button>
         )}
       </div>
 
       {showRotSettings && (
-        <div style={{ marginTop: "14px", padding: "16px", borderRadius: "10px",
-          background: "#0a0a0a", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: C.label,
-            textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "14px" }}>
+        <div style={{ marginTop: "14px", padding: "16px", borderRadius: "4px",
+          background: C.card2, border: `1.5px solid ${C.border2}` }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: "11px", fontWeight: 600,
+            color: C.label, textTransform: "uppercase", letterSpacing: "1px",
+            marginBottom: "14px" }}>
             Auto-Rotation Settings
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
             gap: "12px", marginBottom: "14px" }}>
 
             <div>
-              <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>Swap out</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                color: C.muted, marginBottom: "8px" }}>Swap out</div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <input type="range" min={2} max={15} step={1} value={rotSize}
                   onChange={e => setRotSize(parseInt(e.target.value))}
-                  style={{ flex: 1, accentColor: C.green }} />
-                <span style={{ fontSize: "14px", fontWeight: 800, color: "#fff", minWidth: "20px" }}>
+                  style={{ flex: 1, accentColor: AC }} />
+                <span style={{ fontFamily: FONT.display, fontSize: "14px",
+                  fontWeight: 800, color: C.ink, minWidth: "20px" }}>
                   {rotSize}
                 </span>
               </div>
-              <div style={{ fontSize: "11px", color: C.label, marginTop: "2px" }}>tracks per rotation</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                color: C.label, marginTop: "2px" }}>tracks per rotation</div>
             </div>
 
             <div>
-              <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>Pull from</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                color: C.muted, marginBottom: "8px" }}>Pull from</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 {SOURCE_OPTS.map(o => (
                   <button key={o.v} onClick={() => setRotSource(o.v)} style={{
-                    background: rotSource === o.v ? C.greenBg : "#151515",
-                    border: `1px solid ${rotSource === o.v ? C.green : C.border}`,
-                    borderRadius: "7px", padding: "5px 8px", cursor: "pointer", textAlign: "left",
+                    background: rotSource === o.v ? AW : C.card2,
+                    border: `1.5px solid ${rotSource === o.v ? AC : C.border2}`,
+                    borderRadius: "4px", padding: "5px 8px",
+                    cursor: "pointer", textAlign: "left",
                   }}>
-                    <div style={{ fontSize: "12px", fontWeight: 600,
-                      color: rotSource === o.v ? C.green : "#fff" }}>{o.label}</div>
-                    <div style={{ fontSize: "10px", color: C.muted }}>{o.sub}</div>
+                    <div style={{ fontFamily: FONT.ui, fontSize: "12px", fontWeight: 600,
+                      color: rotSource === o.v ? AC : C.ink }}>{o.label}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: "10px",
+                      color: C.muted }}>{o.sub}</div>
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>How often</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                color: C.muted, marginBottom: "8px" }}>How often</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 {INTERVAL_OPTS.map(o => (
                   <button key={o.value} onClick={() => setRotInterval(o.value)} style={{
-                    background: rotInterval === o.value ? C.greenBg : "#151515",
-                    border: `1px solid ${rotInterval === o.value ? C.green : C.border}`,
-                    borderRadius: "7px", padding: "5px 10px", cursor: "pointer", textAlign: "left",
-                    fontSize: "12px", fontWeight: rotInterval === o.value ? 700 : 400,
-                    color: rotInterval === o.value ? C.green : C.sub,
+                    background: rotInterval === o.value ? AW : C.card2,
+                    border: `1.5px solid ${rotInterval === o.value ? AC : C.border2}`,
+                    borderRadius: "4px", padding: "5px 10px", cursor: "pointer",
+                    textAlign: "left",
+                    fontFamily: FONT.ui, fontSize: "12px",
+                    fontWeight: rotInterval === o.value ? 700 : 400,
+                    color: rotInterval === o.value ? AC : C.sub,
                   }}>{o.label}</button>
                 ))}
               </div>
@@ -710,6 +693,7 @@ function SavedCard({ pl, onSync, onRotate, onDelete, onEdit, onSaved, syncing, r
               style={btn("ghost", { fontSize: "12px", padding: "6px 14px" })}>Cancel</button>
             <button onClick={saveRotationSettings} disabled={savingRot}
               style={btn("primary", { fontSize: "12px", padding: "6px 14px",
+                background: AC, color: C.white, borderColor: AC,
                 opacity: savingRot ? 0.5 : 1 })}>
               {savingRot ? "Saving..." : "Save Settings"}
             </button>
@@ -732,18 +716,22 @@ function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+    <div style={{ position: "fixed", inset: 0,
+      background: "rgba(22,17,24,0.55)",
       zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ ...card(), width: "460px", maxWidth: "95vw",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.7)" }}>
+        border: `1.5px solid ${C.ink}`,
+        boxShadow: "6px 6px 0 rgba(22,17,24,0.18)" }}>
 
         <div style={{ display: "flex", justifyContent: "space-between",
           alignItems: "center", marginBottom: "20px" }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
+            <h3 style={{ margin: 0, fontFamily: FONT.display,
+              fontSize: "16px", fontWeight: 800, color: C.ink }}>
               Rotate "{playlist.name}"
             </h3>
-            <div style={{ fontSize: "12px", color: C.muted, marginTop: "3px" }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: "12px",
+              color: C.muted, marginTop: "3px" }}>
               Swaps lowest-fitting tracks for fresh ones that match the vibe
             </div>
           </div>
@@ -754,29 +742,35 @@ function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
 
         {result ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px",
+              marginBottom: "16px" }}>
               <span style={{ fontSize: "20px" }}>✓</span>
-              <span style={{ color: C.green, fontWeight: 700, fontSize: "15px" }}>
+              <span style={{ fontFamily: FONT.ui, color: AC,
+                fontWeight: 700, fontSize: "15px" }}>
                 Rotated {result.rotated} tracks
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr",
               gap: "16px", marginBottom: "16px" }}>
               <div>
-                <div style={{ fontSize: "11px", color: C.red, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Removed</div>
+                <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.red,
+                  fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px",
+                  marginBottom: "8px" }}>Removed</div>
                 {result.removed.map((n, i) => (
-                  <div key={i} style={{ fontSize: "12px", color: C.muted, marginBottom: "5px" }}>
+                  <div key={i} style={{ fontFamily: FONT.ui, fontSize: "12px",
+                    color: C.sub, marginBottom: "5px" }}>
                     <span style={{ color: C.red }}>− </span>{n}
                   </div>
                 ))}
               </div>
               <div>
-                <div style={{ fontSize: "11px", color: C.green, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Added</div>
+                <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: AC,
+                  fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px",
+                  marginBottom: "8px" }}>Added</div>
                 {result.added.map((n, i) => (
-                  <div key={i} style={{ fontSize: "12px", color: C.sub, marginBottom: "5px" }}>
-                    <span style={{ color: C.green }}>+ </span>{n}
+                  <div key={i} style={{ fontFamily: FONT.ui, fontSize: "12px",
+                    color: C.sub, marginBottom: "5px" }}>
+                    <span style={{ color: AC }}>+ </span>{n}
                   </div>
                 ))}
               </div>
@@ -786,42 +780,48 @@ function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                <label style={{ fontSize: "11px", color: C.label, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: "0.5px" }}>Swap out</label>
-                <span style={{ fontSize: "14px", fontWeight: 800, color: "#fff" }}>{size} tracks</span>
+              <div style={{ display: "flex", justifyContent: "space-between",
+                marginBottom: "8px" }}>
+                <label style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.label,
+                  fontWeight: 600, textTransform: "uppercase",
+                  letterSpacing: "1px" }}>Swap out</label>
+                <span style={{ fontFamily: FONT.display, fontSize: "14px",
+                  fontWeight: 800, color: C.ink }}>{size} tracks</span>
               </div>
               <input type="range" min={2} max={15} step={1} value={size}
                 onChange={e => setSize(parseInt(e.target.value))}
-                style={{ width: "100%", accentColor: C.green }} />
+                style={{ width: "100%", accentColor: AC }} />
               <div style={{ display: "flex", justifyContent: "space-between",
-                fontSize: "10px", color: C.label, marginTop: "3px" }}>
+                fontFamily: FONT.mono, fontSize: "10px", color: C.label,
+                marginTop: "3px" }}>
                 <span>2</span><span>15</span>
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: "11px", color: C.label, fontWeight: 600,
-                textTransform: "uppercase", letterSpacing: "0.5px",
+              <label style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.label,
+                fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px",
                 display: "block", marginBottom: "10px" }}>Pull replacements from</label>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {SOURCE_OPTS.map(o => (
                   <button key={o.v} onClick={() => setSource(o.v)} style={{
-                    background: source === o.v ? C.greenBg : "#151515",
-                    border: `1px solid ${source === o.v ? C.green : C.border}`,
-                    borderRadius: "9px", padding: "10px 14px",
+                    background: source === o.v ? AW : C.card2,
+                    border: `1.5px solid ${source === o.v ? AC : C.border2}`,
+                    borderRadius: "4px", padding: "10px 14px",
                     cursor: "pointer", textAlign: "left", transition: "all 0.12s",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div style={{
-                        width: "14px", height: "14px", borderRadius: "50%",
-                        border: `2px solid ${source === o.v ? C.green : C.border}`,
-                        background: source === o.v ? C.green : "transparent", flexShrink: 0,
+                        width: "12px", height: "12px", borderRadius: "2px",
+                        border: `2px solid ${source === o.v ? AC : C.border2}`,
+                        background: source === o.v ? AC : "transparent", flexShrink: 0,
                       }} />
                       <div>
-                        <div style={{ fontSize: "13px", fontWeight: 700,
-                          color: source === o.v ? C.green : "#fff" }}>{o.label}</div>
-                        <div style={{ fontSize: "11px", color: C.muted, marginTop: "1px" }}>{o.desc}</div>
+                        <div style={{ fontFamily: FONT.ui, fontSize: "13px",
+                          fontWeight: 700,
+                          color: source === o.v ? AC : C.ink }}>{o.label}</div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                          color: C.muted, marginTop: "1px" }}>{o.desc}</div>
                       </div>
                     </div>
                   </button>
@@ -832,7 +832,9 @@ function RotateModal({ playlist, onRotate, onClose, rotating, result }) {
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={onClose} style={btn("ghost", { flex: 1 })}>Cancel</button>
               <button onClick={() => onRotate(size, source)} disabled={rotating}
-                style={btn("primary", { flex: 2, opacity: rotating ? 0.5 : 1 })}>
+                style={btn("primary", { flex: 2,
+                  background: AC, color: C.white, borderColor: AC,
+                  opacity: rotating ? 0.5 : 1 })}>
                 {rotating ? "Rotating..." : `↻ Rotate ${size} tracks`}
               </button>
             </div>
@@ -1108,362 +1110,492 @@ export default function Playlists({ embedded = false }) {
     t.artist.toLowerCase().includes(searchQ.toLowerCase())
   );
 
+  // Hero tab toggle style (white-outline, for the saturated ultraviolet band)
+  const heroTab = (active) => ({
+    padding: "8px 15px", borderRadius: "3px", fontFamily: FONT.ui,
+    fontSize: "12px", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.05em", cursor: "pointer",
+    border: "1.5px solid rgba(255,255,255,0.8)", transition: "all 0.15s",
+    background: active ? "rgba(255,255,255,0.95)" : "transparent",
+    color: active ? AC : C.white,
+  });
+
   return (
-    <div style={embedded ? { width: "100%" } : { maxWidth: "1080px", margin: "0 auto", padding: "36px 24px 100px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: embedded ? "flex-start" : "space-between",
-        alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
-        {!embedded && (
-          <div>
-            <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800 }}>Smart Playlists</h1>
-            <p style={{ margin: "4px 0 0", color: C.muted, fontSize: "13px" }}>
+    <div style={{ background: C.bg, minHeight: "100vh" }}>
+
+      {/* ── Ultraviolet hero masthead ───────────────────────────────────────── */}
+      {!embedded && (
+        <div style={{ background: AC, position: "relative", overflow: "hidden" }}>
+          <div style={{ maxWidth: 1080, margin: "0 auto",
+            padding: "54px 24px 70px", position: "relative" }}>
+            {/* Kicker row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10,
+              marginBottom: 18 }}>
+              <span style={{ width: 15, height: 15, background: C.white,
+                flexShrink: 0 }} />
+              <div style={{ fontFamily: FONT.mono, fontSize: "11px", fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: "1.5px",
+                color: C.white }}>
+                N&#xBA; 05 · Playlists
+              </div>
+              <div style={{ flex: 1, height: 1,
+                background: "rgba(255,255,255,0.45)", minWidth: 20 }} />
+            </div>
+            {/* Headline + tab toggles */}
+            <div style={{ display: "flex", alignItems: "flex-end",
+              justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+              <h1 style={{ ...TYPE.hero, color: C.white, margin: 0 }}>
+                Smart Playlists
+              </h1>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={heroTab(tab === "builder")}
+                  onClick={() => setTab("builder")}>Builder</button>
+                <button style={heroTab(tab === "saved")}
+                  onClick={() => setTab("saved")}>Saved</button>
+              </div>
+            </div>
+            <p style={{ fontFamily: FONT.body, fontSize: "15px", lineHeight: 1.55,
+              color: "rgba(255,255,255,0.88)", marginTop: 18, maxWidth: 560 }}>
               Build rule-based playlists from your library. Auto-sync and rotate them.
             </p>
           </div>
+        </div>
+      )}
+
+      <div style={embedded
+        ? { width: "100%" }
+        : { maxWidth: "1080px", margin: "0 auto", padding: "36px 24px 100px" }}>
+
+        {/* Embedded-mode header (no hero band) */}
+        {embedded && (
+          <div style={{ display: "flex", justifyContent: "space-between",
+            alignItems: "center", marginBottom: "20px",
+            flexWrap: "wrap", gap: "12px" }}>
+            <div>
+              <h1 style={{ margin: 0, fontFamily: FONT.display,
+                fontSize: "22px", fontWeight: 800, color: C.ink }}>Smart Playlists</h1>
+              <p style={{ margin: "4px 0 0", fontFamily: FONT.body,
+                color: C.sub, fontSize: "13px" }}>
+                Build rule-based playlists from your library. Auto-sync and rotate them.
+              </p>
+            </div>
+          </div>
         )}
-      </div>
 
-      {/* ── BUILDER TAB ────────────────────────────────────────────────────── */}
-      {tab === "builder" && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "340px 1fr",
-          gap: "16px", alignItems: "start" }}>
-
-          {/* Left: rule builder */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-
-            {/* Conditions */}
-            <div style={{ ...card() }}>
-              <div style={{ display: "flex", justifyContent: "space-between",
-                alignItems: "center", marginBottom: "10px" }}>
-                <div style={{ fontSize: "11px", color: C.label, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Conditions
-                </div>
-                {conditions.length > 0 && (
-                  <button onClick={() => setConditions([])}
-                    style={{ background: "none", border: "none", cursor: "pointer",
-                      fontSize: "11px", color: C.muted }}>clear all</button>
-                )}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {conditions.map((c, i) => (
-                  <ConditionRow key={i} cond={c}
-                    onChange={v => setConditions(arr => arr.map((x, j) => j === i ? v : x))}
-                    onRemove={() => setConditions(arr => arr.filter((_, j) => j !== i))}
-                    isExclude={false} />
-                ))}
-              </div>
-              <button onClick={() => addCondition(false)}
-                style={{ marginTop: conditions.length ? "8px" : 0,
-                  ...btn("ghost", { fontSize: "12px", padding: "6px 14px", width: "100%" }) }}>
-                + Add condition
-              </button>
-            </div>
-
-            {/* Excludes */}
-            <div style={{ ...card() }}>
-              <div style={{ display: "flex", justifyContent: "space-between",
-                alignItems: "center", marginBottom: "10px" }}>
-                <div style={{ fontSize: "11px", color: C.red, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Exclude
-                </div>
-                {excludes.length > 0 && (
-                  <button onClick={() => setExcludes([])}
-                    style={{ background: "none", border: "none", cursor: "pointer",
-                      fontSize: "11px", color: C.muted }}>clear</button>
-                )}
-              </div>
-              {excludes.length === 0 && (
-                <p style={{ margin: "0 0 8px", fontSize: "12px", color: C.muted }}>
-                  Cut tracks that match these from the result
-                </p>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {excludes.map((c, i) => (
-                  <ConditionRow key={i} cond={c}
-                    onChange={v => setExcludes(arr => arr.map((x, j) => j === i ? v : x))}
-                    onRemove={() => setExcludes(arr => arr.filter((_, j) => j !== i))}
-                    isExclude={true} />
-                ))}
-              </div>
-              <button onClick={() => addCondition(true)}
-                style={{ marginTop: excludes.length ? "8px" : 0,
-                  ...btn("ghost", { fontSize: "12px", padding: "6px 14px",
-                    width: "100%", color: C.red, borderColor: "#3a1a1a" }) }}>
-                + Add exclusion
-              </button>
-            </div>
-
-            {/* Sort + limit */}
-            <div style={{ ...card() }}>
-              <div style={{ fontSize: "11px", color: C.label, fontWeight: 600,
-                textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "10px" }}>
-                Sort & Limit
-              </div>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-                  style={{ ...input(), flex: 1, minWidth: "130px" }}>
-                  <option value="cohesion">Best fit (cohesion)</option>
-                  <option value="saved_at">Date Saved</option>
-                  <option value="energy">Energy</option>
-                  <option value="valence">Valence</option>
-                  <option value="tempo">Tempo</option>
-                  <option value="danceability">Danceability</option>
-                  <option value="acousticness">Acousticness</option>
-                  <option value="release_year">Release Year</option>
-                  <option value="artist">Artist</option>
-                  <option value="name">Title</option>
-                </select>
-                <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}
-                  style={{ ...input() }}>
-                  <option value="desc">↓ Desc</option>
-                  <option value="asc">↑ Asc</option>
-                </select>
-                <select value={limit} onChange={e => setLimit(parseInt(e.target.value))}
-                  style={{ ...input() }}>
-                  {[50, 100, 200, 500, 1000].map(n => (
-                    <option key={n} value={n}>{n} tracks max</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button onClick={() => runPreview()} disabled={loading}
-              style={btn("primary", { width: "100%", padding: "12px",
-                fontSize: "14px", opacity: loading ? 0.6 : 1 })}>
-              {loading ? "Searching..." : "Preview →"}
+        {/* Tab switcher (compact, below-hero version for non-embedded) */}
+        {!embedded && (
+          <div style={{ display: "inline-flex", gap: 4, padding: 4,
+            background: "transparent",
+            border: `1.5px solid ${C.ink}`, borderRadius: "4px",
+            marginBottom: "28px" }}>
+            <button onClick={() => setTab("builder")}
+              style={pill(tab === "builder",
+                { fontFamily: FONT.ui, fontSize: "12.5px" })}>
+              Builder
+            </button>
+            <button onClick={() => setTab("saved")}
+              style={pill(tab === "saved",
+                { fontFamily: FONT.ui, fontSize: "12.5px" })}>
+              Saved
             </button>
           </div>
+        )}
 
-          {/* Right: results */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {tracks === null && (
-              <div style={{ ...card(), textAlign: "center", padding: "48px",
-                color: C.muted }}>
-                <div style={{ fontSize: "32px", marginBottom: "10px" }}>🎵</div>
-                <div style={{ fontSize: "14px" }}>
-                  Set conditions and hit <strong style={{ color: "#fff" }}>Preview</strong>
-                </div>
-                <div style={{ fontSize: "12px", marginTop: "6px" }}>
-                  Filter by mood, energy, BPM, language, decade, and more.
-                </div>
-              </div>
-            )}
+        {/* ── BUILDER TAB ────────────────────────────────────────────────────── */}
+        {tab === "builder" && (
+          <div style={{ display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "340px 1fr",
+            gap: "16px", alignItems: "start" }}>
 
-            {tracks !== null && (
-              <>
-                {/* Stats bar */}
-                {stats && (
-                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap",
-                    padding: "12px 16px", background: C.card,
-                    borderRadius: "10px", border: `1px solid ${C.border}` }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>
-                      {stats.count} tracks
-                    </span>
-                    {stats.avg_tempo && (
-                      <span style={{ fontSize: "12px", color: C.sub }}>
-                        {Math.round(stats.avg_tempo)} avg BPM
-                      </span>
-                    )}
-                    {stats.avg_energy != null && (
-                      <span style={{ fontSize: "12px", color: C.sub }}>
-                        {Math.round(stats.avg_energy * 100)}% energy
-                      </span>
-                    )}
-                    <span style={{ fontSize: "12px", color: C.green }}>
-                      {stats.happy_pct}% happy
-                    </span>
-                    <span style={{ fontSize: "12px", color: C.indigo }}>
-                      {stats.dark_pct}% dark
-                    </span>
-                    <span style={{ fontSize: "12px", color: C.sub }}>
-                      {stats.unique_artists} artists
-                    </span>
-                    {stats.languages && Object.entries(stats.languages)
-                      .filter(([l]) => l !== "english")
-                      .map(([l, n]) => (
-                        <span key={l} style={{ fontSize: "12px", color: C.amber }}>
-                          {n} {l}
-                        </span>
-                      ))}
+            {/* Left: rule builder */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+              {/* Conditions */}
+              <div style={{ ...card(), border: `1.5px solid ${C.ink}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between",
+                  alignItems: "center", marginBottom: "10px" }}>
+                  <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                    color: C.label, fontWeight: 600,
+                    textTransform: "uppercase", letterSpacing: "1px" }}>
+                    Conditions
                   </div>
-                )}
-
-                {/* Search within results */}
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                  <input value={searchQ} placeholder="Search within results..."
-                    onChange={e => setSearchQ(e.target.value)}
-                    style={{ ...input(), flex: 1, minWidth: "150px" }} />
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                    title="How many songs you want — you'll be shown 1.25× to swipe through">
-                    <input type="number" min="5" max="100" value={curateTarget}
-                      onChange={e => setCurateTarget(e.target.value)}
-                      style={{ ...input(), width: "62px", textAlign: "center" }} />
-                    <button onClick={startCurate} disabled={!tracks?.length}
-                      style={btn("ghost", { whiteSpace: "nowrap", opacity: tracks?.length ? 1 : 0.5 })}>
-                      🃏 Curate by swipe
+                  {conditions.length > 0 && (
+                    <button onClick={() => setConditions([])}
+                      style={{ background: "none", border: "none", cursor: "pointer",
+                        fontFamily: FONT.mono, fontSize: "11px", color: C.muted }}>
+                      clear all
                     </button>
-                  </div>
-                  <button onClick={() => setShowSave(true)}
-                    style={btn("primary", { whiteSpace: "nowrap" })}>
-                    Save as Playlist →
-                  </button>
-                </div>
-
-                {/* Track list */}
-                <div style={{ ...card(), padding: "8px" }}>
-                  {displayed.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "32px",
-                      color: C.muted, fontSize: "13px" }}>
-                      {searchQ ? "No matches in results" : "No tracks match these conditions"}
-                    </div>
-                  ) : (
-                    displayed.map(t => (
-                      <TrackRow key={t.id} track={t}
-                        playing={playing}
-                        onPlay={play} />
-                    ))
                   )}
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── SAVED PLAYLISTS TAB ──────────────────────────────────────────────── */}
-      {tab === "saved" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-
-          {/* Language detection setup card */}
-          <div style={{ ...card(), background: "#0a0f0a",
-            border: `1px solid ${C.greenBd}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between",
-              alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff",
-                  marginBottom: "4px" }}>
-                  Language Detection
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {conditions.map((c, i) => (
+                    <ConditionRow key={i} cond={c}
+                      onChange={v => setConditions(arr => arr.map((x, j) => j === i ? v : x))}
+                      onRemove={() => setConditions(arr => arr.filter((_, j) => j !== i))}
+                      isExclude={false} />
+                  ))}
                 </div>
-                <div style={{ fontSize: "12px", color: C.sub }}>
-                  Detects Bengali, Hindi, Arabic and more in your library.
-                  Run setup once, then enrich for romanized tracks.
+                <button onClick={() => addCondition(false)}
+                  style={{ marginTop: conditions.length ? "8px" : 0,
+                    ...btn("ghost", { fontSize: "12px", padding: "6px 14px",
+                      width: "100%" }) }}>
+                  + Add condition
+                </button>
+              </div>
+
+              {/* Excludes */}
+              <div style={{ ...card(), border: `1.5px solid ${C.ink}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between",
+                  alignItems: "center", marginBottom: "10px" }}>
+                  <div style={{ fontFamily: FONT.mono, fontSize: "11px",
+                    color: C.red, fontWeight: 600,
+                    textTransform: "uppercase", letterSpacing: "1px" }}>
+                    Exclude
+                  </div>
+                  {excludes.length > 0 && (
+                    <button onClick={() => setExcludes([])}
+                      style={{ background: "none", border: "none", cursor: "pointer",
+                        fontFamily: FONT.mono, fontSize: "11px", color: C.muted }}>
+                      clear
+                    </button>
+                  )}
                 </div>
-                {languages.length > 0 && (
-                  <div style={{ display: "flex", gap: "8px", marginTop: "8px",
-                    flexWrap: "wrap" }}>
-                    {languages.filter(l => l.language !== "english").map(l => (
-                      <span key={l.language}
-                        style={{ fontSize: "11px", color: C.amber,
-                          background: "#1a1505", padding: "2px 8px",
-                          borderRadius: "10px", border: "1px solid #3a2a05" }}>
-                        {l.count} {l.language}
-                      </span>
+                {excludes.length === 0 && (
+                  <p style={{ margin: "0 0 8px", fontFamily: FONT.body,
+                    fontSize: "12px", color: C.muted }}>
+                    Cut tracks that match these from the result
+                  </p>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {excludes.map((c, i) => (
+                    <ConditionRow key={i} cond={c}
+                      onChange={v => setExcludes(arr => arr.map((x, j) => j === i ? v : x))}
+                      onRemove={() => setExcludes(arr => arr.filter((_, j) => j !== i))}
+                      isExclude={true} />
+                  ))}
+                </div>
+                <button onClick={() => addCondition(true)}
+                  style={{ marginTop: excludes.length ? "8px" : 0,
+                    ...btn("danger", { fontSize: "12px", padding: "6px 14px",
+                      width: "100%" }) }}>
+                  + Add exclusion
+                </button>
+              </div>
+
+              {/* Sort + limit */}
+              <div style={{ ...card(), border: `1.5px solid ${C.ink}` }}>
+                <div style={{ fontFamily: FONT.mono, fontSize: "11px", color: C.label,
+                  fontWeight: 600, textTransform: "uppercase",
+                  letterSpacing: "1px", marginBottom: "10px" }}>
+                  Sort & Limit
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                    style={{ ...input(), flex: 1, minWidth: "130px" }}>
+                    <option value="cohesion">Best fit (cohesion)</option>
+                    <option value="saved_at">Date Saved</option>
+                    <option value="energy">Energy</option>
+                    <option value="valence">Valence</option>
+                    <option value="tempo">Tempo</option>
+                    <option value="danceability">Danceability</option>
+                    <option value="acousticness">Acousticness</option>
+                    <option value="release_year">Release Year</option>
+                    <option value="artist">Artist</option>
+                    <option value="name">Title</option>
+                  </select>
+                  <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}
+                    style={{ ...input() }}>
+                    <option value="desc">↓ Desc</option>
+                    <option value="asc">↑ Asc</option>
+                  </select>
+                  <select value={limit} onChange={e => setLimit(parseInt(e.target.value))}
+                    style={{ ...input() }}>
+                    {[50, 100, 200, 500, 1000].map(n => (
+                      <option key={n} value={n}>{n} tracks max</option>
                     ))}
-                  </div>
-                )}
-                {(setupMsg || enrichMsg) && (
-                  <div style={{ fontSize: "12px", color: C.green, marginTop: "8px" }}>
-                    {setupMsg || enrichMsg}
-                  </div>
-                )}
+                  </select>
+                </div>
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={runSetup}
-                  style={btn("ghost", { fontSize: "12px" })}>
-                  Run Setup
-                </button>
-                <button onClick={runEnrich} disabled={enriching}
-                  style={btn("ghost", { fontSize: "12px",
-                    opacity: enriching ? 0.5 : 1 })}>
-                  {enriching ? "Enriching..." : "Enrich (Last.fm)"}
-                </button>
-              </div>
-            </div>
-          </div>
 
-          {savedLoading ? (
-            <div style={{ textAlign: "center", padding: "40px", color: C.muted }}>
-              Loading...
-            </div>
-          ) : saved.length === 0 ? (
-            <div style={{ ...card(), textAlign: "center", padding: "48px",
-              color: C.muted }}>
-              <div style={{ fontSize: "28px", marginBottom: "10px" }}>📋</div>
-              <div style={{ fontSize: "14px" }}>No saved playlists yet</div>
-              <div style={{ fontSize: "12px", marginTop: "6px" }}>
-                Build one in the Builder tab
-              </div>
-              <button onClick={() => setTab("builder")}
-                style={{ ...btn("primary"), marginTop: "16px" }}>
-                Open Builder
+              <button onClick={() => runPreview()} disabled={loading}
+                style={btn("primary", { width: "100%", padding: "12px",
+                  fontSize: "14px",
+                  background: AC, color: C.white, borderColor: AC,
+                  opacity: loading ? 0.6 : 1 })}>
+                {loading ? "Searching..." : "Preview →"}
               </button>
             </div>
-          ) : (
-            saved.map(pl => (
-              <SavedCard key={pl.id} pl={pl}
-                syncing={syncing} rotating={rotateTarget?.id === pl.id && rotating ? pl.id : null}
-                onSync={handleSync}
-                onRotate={(p) => { setRotateTarget(p); setRotateResult(null); }}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-                onSaved={loadSaved} />
-            ))
-          )}
-        </div>
-      )}
 
-      {/* ── Modals ────────────────────────────────────────────────────────── */}
-      {curating && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(8,8,8,0.97)", zIndex: 300,
-          display: "flex", flexDirection: "column", padding: "24px 20px 28px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-            maxWidth: "480px", width: "100%", margin: "0 auto 10px" }}>
-            <div>
-              <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff" }}>Curate by swipe</div>
-              <div style={{ fontSize: "12px", color: C.sub, marginTop: "2px" }}>
-                <span style={{ color: C.green, fontWeight: 700 }}>{chosen.length}</span> of {curateTarget} chosen · best-fitting first
+            {/* Right: results */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {tracks === null && (
+                <div style={{ ...card(), textAlign: "center", padding: "48px",
+                  border: `1.5px solid ${C.border2}` }}>
+                  <div style={{ fontFamily: FONT.display, fontSize: "32px",
+                    marginBottom: "10px", color: C.faint }}>♪</div>
+                  <div style={{ fontFamily: FONT.ui, fontSize: "14px", color: C.ink }}>
+                    Set conditions and hit <strong>Preview</strong>
+                  </div>
+                  <div style={{ fontFamily: FONT.body, fontSize: "12px",
+                    color: C.sub, marginTop: "6px" }}>
+                    Filter by mood, energy, BPM, language, decade, and more.
+                  </div>
+                </div>
+              )}
+
+              {tracks !== null && (
+                <>
+                  {/* Stats bar */}
+                  {stats && (
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap",
+                      padding: "12px 16px", background: C.card,
+                      borderRadius: "4px",
+                      border: `1.5px solid ${C.border2}` }}>
+                      <span style={{ fontFamily: FONT.display, fontSize: "13px",
+                        fontWeight: 700, color: C.ink }}>
+                        {stats.count} tracks
+                      </span>
+                      {stats.avg_tempo && (
+                        <span style={{ fontFamily: FONT.mono, fontSize: "12px",
+                          color: C.sub }}>
+                          {Math.round(stats.avg_tempo)} avg BPM
+                        </span>
+                      )}
+                      {stats.avg_energy != null && (
+                        <span style={{ fontFamily: FONT.mono, fontSize: "12px",
+                          color: C.sub }}>
+                          {Math.round(stats.avg_energy * 100)}% energy
+                        </span>
+                      )}
+                      <span style={{ fontFamily: FONT.mono, fontSize: "12px",
+                        color: AC }}>
+                        {stats.happy_pct}% happy
+                      </span>
+                      <span style={{ fontFamily: FONT.mono, fontSize: "12px",
+                        color: C.indigo }}>
+                        {stats.dark_pct}% dark
+                      </span>
+                      <span style={{ fontFamily: FONT.mono, fontSize: "12px",
+                        color: C.sub }}>
+                        {stats.unique_artists} artists
+                      </span>
+                      {stats.languages && Object.entries(stats.languages)
+                        .filter(([l]) => l !== "english")
+                        .map(([l, n]) => (
+                          <span key={l} style={{ fontFamily: FONT.mono,
+                            fontSize: "12px", color: C.brown }}>
+                            {n} {l}
+                          </span>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Search within results */}
+                  <div style={{ display: "flex", gap: "10px",
+                    alignItems: "center", flexWrap: "wrap" }}>
+                    <input value={searchQ} placeholder="Search within results..."
+                      onChange={e => setSearchQ(e.target.value)}
+                      style={{ ...input(), flex: 1, minWidth: "150px" }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                      title="How many songs you want — you'll be shown 1.25× to swipe through">
+                      <input type="number" min="5" max="100" value={curateTarget}
+                        onChange={e => setCurateTarget(e.target.value)}
+                        style={{ ...input(), width: "62px", textAlign: "center" }} />
+                      <button onClick={startCurate} disabled={!tracks?.length}
+                        style={btn("ghost", { whiteSpace: "nowrap",
+                          opacity: tracks?.length ? 1 : 0.5 })}>
+                        Curate by swipe
+                      </button>
+                    </div>
+                    <button onClick={() => setShowSave(true)}
+                      style={btn("primary", { whiteSpace: "nowrap",
+                        background: AC, color: C.white, borderColor: AC })}>
+                      Save as Playlist →
+                    </button>
+                  </div>
+
+                  {/* Track list */}
+                  <div style={{ ...card(), padding: "8px",
+                    border: `1.5px solid ${C.border2}` }}>
+                    {displayed.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "32px",
+                        fontFamily: FONT.body, color: C.muted, fontSize: "13px" }}>
+                        {searchQ ? "No matches in results" : "No tracks match these conditions"}
+                      </div>
+                    ) : (
+                      displayed.map(t => (
+                        <TrackRow key={t.id} track={t}
+                          playing={playing}
+                          onPlay={play} />
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── SAVED PLAYLISTS TAB ──────────────────────────────────────────────── */}
+        {tab === "saved" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+            {/* Language detection setup card */}
+            <div style={{ ...card(), background: AW,
+              border: `1.5px solid ${AC}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between",
+                alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+                <div>
+                  <div style={{ fontFamily: FONT.display, fontSize: "14px",
+                    fontWeight: 700, color: C.ink, marginBottom: "4px" }}>
+                    Language Detection
+                  </div>
+                  <div style={{ fontFamily: FONT.body, fontSize: "12px", color: C.sub }}>
+                    Detects Bengali, Hindi, Arabic and more in your library.
+                    Run setup once, then enrich for romanized tracks.
+                  </div>
+                  {languages.length > 0 && (
+                    <div style={{ display: "flex", gap: "6px", marginTop: "8px",
+                      flexWrap: "wrap" }}>
+                      {languages.filter(l => l.language !== "english").map(l => (
+                        <span key={l.language}
+                          style={{ fontFamily: FONT.mono, fontSize: "11px",
+                            color: C.brown, background: C.amberBg,
+                            padding: "2px 8px", borderRadius: "3px",
+                            border: `1px solid ${C.amber}55` }}>
+                          {l.count} {l.language}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(setupMsg || enrichMsg) && (
+                    <div style={{ fontFamily: FONT.mono, fontSize: "12px",
+                      color: AC, marginTop: "8px" }}>
+                      {setupMsg || enrichMsg}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={runSetup}
+                    style={btn("ghost", { fontSize: "12px" })}>
+                    Run Setup
+                  </button>
+                  <button onClick={runEnrich} disabled={enriching}
+                    style={btn("ghost", { fontSize: "12px",
+                      opacity: enriching ? 0.5 : 1 })}>
+                    {enriching ? "Enriching..." : "Enrich (Last.fm)"}
+                  </button>
+                </div>
               </div>
             </div>
-            <button onClick={() => setCurating(false)}
-              style={{ background: "none", border: "none", color: C.muted, fontSize: "22px", cursor: "pointer", lineHeight: 1 }}>×</button>
-          </div>
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {curateCards === null
-              ? <div style={{ color: C.sub, fontSize: "14px" }}>Finding the songs that fit best…</div>
-              : curateCards.length === 0
-                ? <div style={{ color: C.sub, fontSize: "14px", textAlign: "center" }}>No tracks match this rule.<br />Loosen your conditions and try again.</div>
-                : <SwipeDeck cards={curateCards}
-                    onKeep={(c) => setChosen((p) => (p.includes(c.id) ? p : [...p, c.id]))}
-                    onRemove={() => {}} />}
-          </div>
-          <div style={{ maxWidth: "480px", width: "100%", margin: "0 auto" }}>
-            <button onClick={createFromChosen} disabled={!chosen.length || creating}
-              style={btn("primary", { width: "100%", padding: "13px", opacity: (chosen.length && !creating) ? 1 : 0.5 })}>
-              {creating ? "Creating…" : `Create playlist (${chosen.length} song${chosen.length === 1 ? "" : "s"})`}
-            </button>
-          </div>
-        </div>
-      )}
 
-      {showSave && (
-        <SaveModal
-          stats={stats}
-          saving={saving}
-          editTarget={editTarget}
-          onSave={handleSave}
-          onClose={() => { setShowSave(false); setEditTarget(null); }} />
-      )}
+            {savedLoading ? (
+              <div style={{ textAlign: "center", padding: "40px",
+                fontFamily: FONT.body, color: C.muted }}>
+                Loading...
+              </div>
+            ) : saved.length === 0 ? (
+              <div style={{ ...card(), textAlign: "center", padding: "48px",
+                border: `1.5px solid ${C.border2}` }}>
+                <div style={{ fontFamily: FONT.display, fontSize: "28px",
+                  marginBottom: "10px", color: C.faint }}>♪</div>
+                <div style={{ fontFamily: FONT.ui, fontSize: "14px",
+                  color: C.ink }}>No saved playlists yet</div>
+                <div style={{ fontFamily: FONT.body, fontSize: "12px",
+                  color: C.sub, marginTop: "6px" }}>
+                  Build one in the Builder tab
+                </div>
+                <button onClick={() => setTab("builder")}
+                  style={{ ...btn("primary",
+                    { background: AC, color: C.white, borderColor: AC }),
+                    marginTop: "16px" }}>
+                  Open Builder
+                </button>
+              </div>
+            ) : (
+              saved.map(pl => (
+                <SavedCard key={pl.id} pl={pl}
+                  syncing={syncing}
+                  rotating={rotateTarget?.id === pl.id && rotating ? pl.id : null}
+                  onSync={handleSync}
+                  onRotate={(p) => { setRotateTarget(p); setRotateResult(null); }}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                  onSaved={loadSaved} />
+              ))
+            )}
+          </div>
+        )}
 
-      {rotateTarget && (
-        <RotateModal
-          playlist={rotateTarget}
-          rotating={rotating}
-          result={rotateResult}
-          onRotate={handleRotate}
-          onClose={() => { setRotateTarget(null); setRotateResult(null); }} />
-      )}
+        {/* ── Modals ────────────────────────────────────────────────────────── */}
+        {curating && (
+          <div style={{ position: "fixed", inset: 0,
+            background: C.bg, zIndex: 300,
+            display: "flex", flexDirection: "column",
+            padding: "24px 20px 28px",
+            borderTop: `4px solid ${AC}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between",
+              alignItems: "center", maxWidth: "480px", width: "100%",
+              margin: "0 auto 10px" }}>
+              <div>
+                <div style={{ fontFamily: FONT.display, fontSize: "18px",
+                  fontWeight: 800, color: C.ink }}>Curate by swipe</div>
+                <div style={{ fontFamily: FONT.mono, fontSize: "12px",
+                  color: C.sub, marginTop: "2px" }}>
+                  <span style={{ color: AC, fontWeight: 700 }}>{chosen.length}</span>
+                  {" "}of {curateTarget} chosen · best-fitting first
+                </div>
+              </div>
+              <button onClick={() => setCurating(false)}
+                style={{ background: "none", border: "none", color: C.muted,
+                  fontSize: "22px", cursor: "pointer", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ flex: 1, display: "flex",
+              alignItems: "center", justifyContent: "center" }}>
+              {curateCards === null
+                ? <div style={{ fontFamily: FONT.body, color: C.sub,
+                    fontSize: "14px" }}>Finding the songs that fit best…</div>
+                : curateCards.length === 0
+                  ? <div style={{ fontFamily: FONT.body, color: C.sub,
+                      fontSize: "14px", textAlign: "center" }}>
+                      No tracks match this rule.<br />Loosen your conditions and try again.
+                    </div>
+                  : <SwipeDeck cards={curateCards}
+                      onKeep={(c) => setChosen((p) => (p.includes(c.id) ? p : [...p, c.id]))}
+                      onRemove={() => {}} />}
+            </div>
+            <div style={{ maxWidth: "480px", width: "100%", margin: "0 auto" }}>
+              <button onClick={createFromChosen}
+                disabled={!chosen.length || creating}
+                style={btn("primary", {
+                  width: "100%", padding: "13px",
+                  background: AC, color: C.white, borderColor: AC,
+                  opacity: (chosen.length && !creating) ? 1 : 0.5 })}>
+                {creating ? "Creating…"
+                  : `Create playlist (${chosen.length} song${chosen.length === 1 ? "" : "s"})`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showSave && (
+          <SaveModal
+            stats={stats}
+            saving={saving}
+            editTarget={editTarget}
+            onSave={handleSave}
+            onClose={() => { setShowSave(false); setEditTarget(null); }} />
+        )}
+
+        {rotateTarget && (
+          <RotateModal
+            playlist={rotateTarget}
+            rotating={rotating}
+            result={rotateResult}
+            onRotate={handleRotate}
+            onClose={() => { setRotateTarget(null); setRotateResult(null); }} />
+        )}
+      </div>
     </div>
   );
 }

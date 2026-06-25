@@ -229,7 +229,7 @@ def create_room(req: CreateRoomRequest):
     return {
         "room_id":    room_id,
         "room_name":  req.name,
-        "vibe_label": preset["label"] if preset else None,
+        "vibe_label": preset["label"] if preset else (req.vibe_preset or None),
         "share_url":  f"/collab/{room_id}",
     }
 
@@ -432,8 +432,8 @@ def get_room(room_id: str, voter_name: str = Query("")):
         "owner":      room[2],
         "status":     room[3] or "open",
         "vibe_preset":  room[4],
-        "vibe_label":   preset_info["label"]       if preset_info else None,
-        "vibe_desc":    preset_info["description"] if preset_info else None,
+        "vibe_label":   preset_info["label"]       if preset_info else room[4],
+        "vibe_desc":    preset_info["description"] if preset_info else room[4],
         "energy_min":   e_min, "energy_max": e_max,
         "valence_min":  v_min, "valence_max": v_max,
         "playlist_url": room[9],

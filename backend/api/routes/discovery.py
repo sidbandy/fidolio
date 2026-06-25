@@ -868,27 +868,100 @@ def mixes_with(track: str, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"), si
 def _feat_row(row, start):
     return _feats(*[float(x) if x is not None else None for x in row[start:start + 5]])
 
+def _artist_centroid(cur, user_id, artist):
+    """Avg audio features across this artist's enriched tracks in the user's library.
+    A strong sonic proxy for an un-enriched / unsaved song by an artist they already own —
+    it probably sounds like the rest of that artist's catalogue they saved."""
+    cur.execute(f"""SELECT AVG(energy), AVG(valence), AVG(tempo), AVG(danceability), AVG(acousticness), COUNT(*)
+                    FROM tracks WHERE user_id=%s AND LOWER(artist)=LOWER(%s) AND energy IS NOT NULL""",
+                (user_id, artist))
+    r = cur.fetchone()
+    if not r or r[0] is None or not r[5]:
+        return None
+    return _feats(float(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]))
+
+def _same_artist_pick(cur, user_id, artist, tv, stats, exclude):
+    """The most sonically-similar OWNED track by the same artist as what's playing, so the
+    first 'play next' is always 'more of this artist' — and the closest-sounding one at that."""
+    if not artist:
+        return None
+    cur.execute(f"""SELECT id, name, artist, {FEAT_COLS} FROM tracks
+                    WHERE user_id=%s AND LOWER(artist)=LOWER(%s) AND energy IS NOT NULL""",
+                (user_id, artist))
+    best, best_sc = None, -1.0
+    for r in cur.fetchall():
+        if r[0] in exclude:
+            continue
+        sc = similarity.score(tv, similarity.to_vector(_feat_row(r, 3), stats))
+        if sc > best_sc:
+            best_sc, best = sc, r
+    if not best:
+        return None
+    return {"id": best[0], "name": best[1], "artist": best[2], "relation": "same artist",
+            "owned": True, "spotify_url": f"https://open.spotify.com/track/{best[0]}"}
+
 @router.get("/play-next")
-def play_next(track: str = Query(...), user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"), size: int = Query(8, le=15)):
+def play_next(
+    track: str = Query(...),
+    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    size: int = Query(8, le=15),
+    artist: Optional[str] = Query(None),
+    spotify_id: Optional[str] = Query(None),
+    energy: Optional[float] = Query(None),
+    valence: Optional[float] = Query(None),
+    tempo: Optional[float] = Query(None),
+    danceability: Optional[float] = Query(None),
+    acousticness: Optional[float] = Query(None),
+):
     """Context-aware 'what to play next': blends the current track + the last 10 minutes
     of listening (audio features, language, mood) with harmonic-key compatibility to rank
-    the best owned tracks AND fresh ReccoBeats picks. Every suggestion is meant to segue."""
+    the best owned tracks AND fresh ReccoBeats picks. Every suggestion is meant to segue.
+
+    The client (Now Playing) passes what it already knows — spotify_id, artist, and the
+    track's audio features — so we resolve the *exact* song and never collapse the target to
+    a constant default. Un-enriched / unsaved songs fall through a context cascade:
+    client features → DB-row features → artist centroid → (recent run ⊕ library centroid)."""
     from collections import Counter
     conn = get_conn(); cur = conn.cursor()
     stats = similarity.library_feature_stats(cur, user_id)
 
-    # ── the current track ──
-    cur.execute(f"""SELECT id, artist, {FEAT_COLS}, track_key, mode, language, instrumentalness
-                    FROM tracks WHERE user_id=%s AND LOWER(name) LIKE %s
-                    ORDER BY saved_at DESC LIMIT 1""", (user_id, f"%{track.lower()}%"))
-    c = cur.fetchone()
-    cur_id = c[0] if c else None
-    cur_feat = _feat_row(c, 2) if c else dict(similarity.DEFAULTS)
+    # ── resolve the current track precisely: spotify id → name+artist → name-LIKE ──
+    SEL = (f"SELECT id, artist, {FEAT_COLS}, track_key, mode, language, instrumentalness "
+           f"FROM tracks WHERE user_id=%s AND {{cond}} ORDER BY saved_at DESC LIMIT 1")
+    c = None
+    if spotify_id:
+        cur.execute(SEL.format(cond="id=%s"), (user_id, spotify_id))
+        c = cur.fetchone()
+    if not c and artist:
+        cur.execute(SEL.format(cond="LOWER(name)=%s AND LOWER(artist) LIKE %s"),
+                    (user_id, track.lower(), f"%{artist.lower()}%"))
+        c = cur.fetchone()
+    if not c:
+        cur.execute(SEL.format(cond="LOWER(name) LIKE %s"), (user_id, f"%{track.lower()}%"))
+        c = cur.fetchone()
+
+    cur_id = (c[0] if c else None) or spotify_id
+    cur_artist = (c[1] if c else None) or artist
     cur_key, cur_mode = (c[7], c[8]) if c else (None, None)
-    cur_inst = c[10] if c else None
     cur_lang = c[9] if c else None
-    cur_moods = set(compute_moods(cur_feat["valence"], cur_feat["energy"], cur_feat["tempo"],
-                                  cur_feat["acousticness"], cur_feat["danceability"], cur_inst)) if c else set()
+    cur_inst = c[10] if c else None
+
+    # ── current-track features: client signal → DB row → artist centroid → None ──
+    client_feat = (_feats(energy, valence, tempo, danceability, acousticness)
+                   if energy is not None else None)
+    db_feat = _feat_row(c, 2) if c else None
+    if client_feat:
+        cur_feat = client_feat
+    elif db_feat and db_feat.get("energy") is not None:
+        cur_feat = db_feat
+    elif cur_artist:
+        cur_feat = _artist_centroid(cur, user_id, cur_artist)   # may be None
+    else:
+        cur_feat = None
+
+    cur_moods = (set(compute_moods(cur_feat["valence"], cur_feat["energy"], cur_feat["tempo"],
+                                   cur_feat["acousticness"], cur_feat["danceability"], cur_inst))
+                 if cur_feat else set())
 
     # ── last 10 minutes of listening ──
     cur.execute(f"""SELECT t.id, {", ".join("t." + x.strip() for x in FEAT_COLS.split(","))}, t.language, t.instrumentalness
@@ -904,14 +977,20 @@ def play_next(track: str = Query(...), user_id: str = Query("0tz6fep2m5bx1vq85g4
         rf = _feat_row(r, 1)
         recent_moods |= set(compute_moods(rf["valence"], rf["energy"], rf["tempo"], rf["acousticness"], rf["danceability"], r[7]))
 
-    # blended target — current track leads, recent context refines
+    # blended target — never a constant default. With the current track's features it leads
+    # and recent context refines; without them, the user's recent run + library taste centroid
+    # (their sonic identity) carry the target so it stays taste-shaped, not generic.
     def wavg(pairs):
         out = {}
         for f in similarity.FEATURES:
             vals = [(d[f], w) for d, w in pairs if d and d.get(f) is not None]
             out[f] = (sum(v * w for v, w in vals) / sum(w for _v, w in vals)) if vals else similarity.DEFAULTS[f]
         return out
-    target = wavg([(cur_feat, 6.0), (recent_avg, 4.0)])
+    centroid = {f: stats[f][0] for f in similarity.FEATURES}   # per-feature library mean = taste centroid
+    if cur_feat:
+        target = wavg([(cur_feat, 6.0), (recent_avg, 4.0)])
+    else:
+        target = wavg([(recent_avg, 5.0), (centroid, 5.0)])
     tv = similarity.to_vector(target, stats)
     target_moods = cur_moods | recent_moods
 
@@ -952,12 +1031,23 @@ def play_next(track: str = Query(...), user_id: str = Query("0tz6fep2m5bx1vq85g4
                            "owned": True, "spotify_url": f"https://open.spotify.com/track/{r[0]}"}))
     owned.sort(key=lambda x: x[0], reverse=True)
 
+    # the lead pick is always the closest-sounding owned track by the SAME artist
+    same_artist = _same_artist_pick(cur, user_id, cur_artist, tv, stats, exclude)
+
     cur.execute("SELECT id FROM tracks WHERE user_id=%s", (user_id,))
     library_ids = {r[0] for r in cur.fetchall()}
+
+    # seed ReccoBeats by the actual current track + recent run; pad with top-played ids so
+    # there's always a workable seed even when the song is unsaved/unknown to ReccoBeats.
+    seeds = [s for s in ([cur_id] + recent_ids) if s]
+    if len(seeds) < 2:
+        for s in get_seeds_from_library(cur, user_id, limit=3):
+            if s and s not in seeds:
+                seeds.append(s)
+    seeds = seeds[:5]
     cur.close(); conn.close()
 
     # ── fresh, unowned picks via ReccoBeats, seeded by the current + recent run ──
-    seeds = [s for s in ([cur_id] + recent_ids) if s][:5]
     rb = call_reccobeats(seeds, target, size)
     lang_filter = "en" if (lang_target in (None, "english")) else "any"
     rb_fmt = format_rb_tracks(rb, library_ids, 4, lang_filter)
@@ -965,9 +1055,18 @@ def play_next(track: str = Query(...), user_id: str = Query("0tz6fep2m5bx1vq85g4
                 "relation": "new · fits the flow", "owned": False, "spotify_url": x.get("spotify_url")}
                for i, x in enumerate(rb_fmt) if not x.get("already_saved")][:3]
 
-    tracks = [o[1] for o in owned[:max(3, size - len(unowned))]] + unowned
+    # assemble: same-artist lead → best owned segues → fresh unowned picks (dedup by id)
+    head = [same_artist] if same_artist else []
+    seen = {t["id"] for t in head}
+    body = []
+    for _sc, o in owned:
+        if o["id"] in seen:
+            continue
+        body.append(o); seen.add(o["id"])
+    owned_take = max(3, size - len(unowned) - len(head))
+    tracks = head + body[:owned_take] + unowned
     return {
-        "seed": {"name": track, "language": cur_lang, "moods": sorted(cur_moods),
+        "seed": {"name": track, "artist": cur_artist, "language": cur_lang, "moods": sorted(cur_moods),
                  "tempo": round(target["tempo"], 1)},
         "recent_count": len(recent_ids),
         "language_locked": lang_target,

@@ -1,11 +1,18 @@
 import { useState, useEffect } from "react";
 import usePreview from "../hooks/usePreview";
-import { C, TYPE, FONT, MOOD, input } from "../theme";
+import { C, TYPE, FONT, input, SECTION, PAGE_BG, btn, PANEL, SHEEN } from "../theme";
 import { useRef } from "react";
-import { PageHeader, Card, Pill, Department, Expander, Input, Button, TrackRow, EmptyState, Modal, Reveal, FlipCard } from "../ui";
+import { Card, Department, Expander, Input, Button, TrackRow, EmptyState, Modal, Reveal, FlipCard } from "../ui";
+import Masthead from "../ui/Masthead";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const LIMIT = 50;
+
+// Section 3 = forest green.
+const AC = SECTION[3].color;  // #3C8A57 — forest green.
+const AW = SECTION[3].wash;   // rgba(60,138,87,0.20) — green wash for "yours" / active states
+const AC_ON = SECTION[3].on;  // #FFFFFF (white — on green fills)
+const AON = AC_ON;
 
 const QUICK_VIBES = [
   { label: "🌙 Late Night", params: { max_valence: 0.4, max_energy: 0.55 } },
@@ -35,6 +42,20 @@ const FORYOU_LANGS = [
   { value: "en+hi+bn", label: "English + Hindi + Bengali" },
   { value: "any", label: "Any language" },
 ];
+
+// Editorial sub-tab: boxy, ink-bordered toggle — not rounded pills.
+const subTab = (active) => ({
+  padding: "8px 16px", borderRadius: 4, border: "none", cursor: "pointer",
+  fontSize: 12.5, fontWeight: 700, fontFamily: FONT.ui, textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  background: active ? C.ink : "transparent",
+  color: active ? C.bg : C.ink,
+  transition: "all 0.15s",
+});
+
+// Hard offset shadow — signature raised-card treatment.
+const RAISED_SHADOW = "5px 5px 0 rgba(22,17,24,0.15)";
+const MODAL_SHADOW  = "8px 8px 0 rgba(22,17,24,0.18)";
 
 /* ─────────────────────────── SEARCH ─────────────────────────── */
 function SearchView() {
@@ -109,13 +130,29 @@ function SearchView() {
 
   return (
     <Reveal>
-      <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
-        <Pill active={mode === "nlp"} onClick={() => { setMode("nlp"); setResults(null); }}>✨ Describe It</Pill>
-        <Pill active={mode === "filters"} onClick={() => { setMode("filters"); setResults(null); }}>🎚️ Use Filters</Pill>
-        <button onClick={weatherSearch} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 9, padding: "10px 18px", borderRadius: 12, border: `1px solid ${weatherData ? C.amber : "#3a2a00"}`, background: weatherData ? C.amber : C.amberBg, color: weatherData ? "#000" : C.amber, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" }}>
-          <WeatherIcon size={20} />
-          {weatherLoading ? "Reading the sky…" : weatherData ? `${Math.round(weatherData.temperature)}°C` : "Match my weather"}
+      {/* Weather Station — the prominent, cool "tune to your sky" filter */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "15px 20px", marginBottom: 22, background: PANEL, border: `1.5px solid ${weatherData ? AC : C.border2}`, borderRadius: 6, boxShadow: SHEEN, flexWrap: "wrap" }}>
+        <div style={{ width: 48, height: 48, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: AW, border: `1px solid ${AC}`, flexShrink: 0 }}>
+          <WeatherIcon size={26} color={AC} />
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.6px", color: AC }}>Weather Station</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 19, fontWeight: 800, color: C.ink, marginTop: 4, letterSpacing: "-0.01em" }}>
+            {weatherData ? `${Math.round(weatherData.temperature)}°C — tuned to your sky` : "Match your music to the sky outside"}
+          </div>
+          {weatherData?.explanation && <div style={{ fontSize: 12, fontFamily: FONT.mono, color: C.sub, marginTop: 4 }}>{weatherData.explanation}</div>}
+        </div>
+        <button onClick={weatherSearch} style={btn("primary", { whiteSpace: "nowrap" })}>
+          {weatherLoading ? "Reading the sky…" : weatherData ? "Re-read ↻" : "Tune to weather →"}
         </button>
+      </div>
+
+      {/* Mode toggle — boxy editorial, not pills */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "transparent", border: `1.5px solid ${C.border2}`, borderRadius: 6 }}>
+          <button onClick={() => { setMode("nlp"); setResults(null); }} style={subTab(mode === "nlp")}>Describe It</button>
+          <button onClick={() => { setMode("filters"); setResults(null); }} style={subTab(mode === "filters")}>Use Filters</button>
+        </div>
       </div>
 
       {mode === "nlp" && (
@@ -124,25 +161,30 @@ function SearchView() {
             <Input value={nlpQuery} onChange={(e) => setNlpQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && nlpSearch()} autoFocus placeholder='Try: "sad slow songs" or "chill acoustic 90s"' style={{ flex: 1, minWidth: 220, padding: "13px 18px", fontSize: 15 }} />
             <Button onClick={nlpSearch} style={{ padding: "13px 26px", fontSize: 15 }}>Search</Button>
           </div>
+          {/* Interpreted chip — lime fill with ink text */}
           {interpreted && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 8, padding: "6px 14px", fontSize: 13 }}>
-              <span style={{ color: C.green }}>✓ Interpreted as:</span><span style={{ color: "#aaa" }}>{interpreted}</span>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: AW, border: `1.5px solid ${C.ink}`, borderRadius: 4, padding: "7px 14px", fontSize: 12, fontFamily: FONT.mono }}>
+              <span style={{ color: C.ink, fontWeight: 700 }}>✓ Interpreted as:</span>
+              <span style={{ color: C.sub }}>{interpreted}</span>
             </div>
           )}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {NLP_SUGGEST.map((s) => <Pill key={s} active={false} onClick={() => setNlpQuery(s)} style={{ minHeight: 32, padding: "5px 12px", fontSize: 12, background: "transparent" }}>{s}</Pill>)}
+          {/* NLP suggestion chips — boxy editorial mono tags */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+            {NLP_SUGGEST.map((s) => (
+              <button key={s} onClick={() => setNlpQuery(s)} style={{
+                padding: "6px 12px", borderRadius: 3, border: `1px solid ${C.border2}`,
+                background: "transparent", color: C.sub, cursor: "pointer",
+                fontSize: 11.5, fontFamily: FONT.mono, letterSpacing: "0.02em",
+                transition: "all 0.15s",
+              }}>{s}</button>
+            ))}
           </div>
         </div>
       )}
 
       {mode === "filters" && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-            {QUICK_VIBES.map((v) => (
-              <Pill key={v.label} active={activeVibe === v.label} onClick={() => { resetFilters(); setActiveVibe(v.label); filterSearch(v.params); }} style={{ minHeight: 32, padding: "6px 13px", fontSize: 12 }}>{v.label}</Pill>
-            ))}
-          </div>
-          <Card style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 16 }}>
+          <Card style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 20 }}>
             <div><div style={{ ...TYPE.micro, marginBottom: 6 }}>Text search</div><Input value={textQ} onChange={(e) => setTextQ(e.target.value)} placeholder="Song, album…" style={{ width: "100%" }} /></div>
             <div><div style={{ ...TYPE.micro, marginBottom: 6 }}>Artist</div><Input value={artistFilter} onChange={(e) => setArtistFilter(e.target.value)} placeholder="Artist name…" style={{ width: "100%" }} /></div>
             <RangeRow label="BPM range" a={minTempo} setA={setMinTempo} b={maxTempo} setB={setMaxTempo} />
@@ -151,7 +193,7 @@ function SearchView() {
             <RangeRow label="Release year" a={minYear} setA={setMinYear} b={maxYear} setB={setMaxYear} />
             <div>
               <div style={{ ...TYPE.micro, marginBottom: 6 }}>Language</div>
-              <select value={language} onChange={(e) => setLanguage(e.target.value)} style={input({ width: "100%", cursor: "pointer", color: language ? "#fff" : C.muted })}>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} style={input({ width: "100%", cursor: "pointer", color: language ? C.ink : C.muted })}>
                 {LANGUAGES.map((l) => <option key={l} value={l}>{l === "" ? "Any language" : l[0].toUpperCase() + l.slice(1)}</option>)}
               </select>
             </div>
@@ -163,26 +205,16 @@ function SearchView() {
         </div>
       )}
 
-      {weatherData && (
-        <div style={{ background: C.amberBg, border: "1px solid #3a2a00", borderRadius: 14, padding: "16px 20px", marginBottom: 22, display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ color: C.amber, flexShrink: 0 }}><WeatherIcon size={40} color={C.amber} /></div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: FONT.display, fontSize: 21, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{Math.round(weatherData.temperature)}°C — matched to your sky</div>
-            <div style={{ fontSize: 13, color: C.amber, marginTop: 3 }}>{weatherData.explanation}</div>
-          </div>
-        </div>
-      )}
-
       {loading && <div style={{ ...TYPE.body, padding: "30px 0" }}>Searching your library…</div>}
 
       {results && !loading && (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-            <div style={{ ...TYPE.micro, color: C.faint }}>{results.length} songs{total > results.length ? ` of ${total.toLocaleString()} matches` : ""}</div>
+            <div style={{ ...TYPE.micro, color: C.muted }}>{results.length} songs{total > results.length ? ` of ${total.toLocaleString()} matches` : ""}</div>
             {results.length > 0 && (saveResult?.success ? (
-              <a href={saveResult.playlist_url} target="_blank" rel="noreferrer" style={{ padding: "8px 18px", borderRadius: 10, background: C.green, color: "#000", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>✓ Open in Spotify ↗</a>
+              <a href={saveResult.playlist_url} target="_blank" rel="noreferrer" style={{ ...btn("primary"), textDecoration: "none" }}>Open in Spotify ↗</a>
             ) : (
-              <Button onClick={() => { setShowSave(true); setSaveResult(null); setSaveName(interpreted ? `Fidolio: ${interpreted}` : "Fidolio Search"); }} style={{ background: C.greenBg, color: C.green, border: `1px solid ${C.greenBd}` }}>+ Save as Playlist</Button>
+              <Button onClick={() => { setShowSave(true); setSaveResult(null); setSaveName(interpreted ? `Fidolio: ${interpreted}` : "Fidolio Search"); }}>+ Save as Playlist</Button>
             ))}
           </div>
           {results.length === 0 ? <EmptyState title="No songs found" hint="Try a different description or fewer filters." /> : (
@@ -194,7 +226,7 @@ function SearchView() {
       {!results && !loading && <EmptyState icon="🔍" title="Describe what you want to hear" hint="Natural language, filters, or your local weather." />}
 
       <Modal open={showSave} onClose={() => setShowSave(false)}>
-        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Save as Spotify Playlist</div>
+        <div style={{ fontFamily: FONT.display, fontSize: 18, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Save as Spotify Playlist</div>
         <div style={{ ...TYPE.body, fontSize: 12, marginBottom: 16 }}>Creates a playlist with these {results?.length || 0} songs.</div>
         <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveAsPlaylist()} autoFocus placeholder="Playlist name" style={{ width: "100%", marginBottom: 16, padding: "11px 14px", fontSize: 14 }} />
         {saveResult && !saveResult.success && <div style={{ fontSize: 12, color: C.red, marginBottom: 12 }}>{saveResult.error || "Could not create playlist."}</div>}
@@ -210,16 +242,16 @@ function SearchView() {
 /* ─────────────────────────── FOR YOU ─────────────────────────── */
 function ForYouTrack({ track, fromLibrary }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderRadius: 10, background: fromLibrary ? C.greenBg : C.card, border: `1px solid ${fromLibrary ? C.greenBd : C.border}` }}>
-      <div style={{ width: 34, height: 34, borderRadius: "50%", background: fromLibrary ? C.green : "#1a1a1a", color: fromLibrary ? "#000" : C.muted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{fromLibrary ? "✓" : "♪"}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderRadius: 4, background: fromLibrary ? AW : C.card, border: `1.5px solid ${fromLibrary ? C.ink : C.line}` }}>
+      <div style={{ width: 34, height: 34, borderRadius: 3, background: fromLibrary ? AC : C.card2, color: fromLibrary ? AC_ON : C.muted, border: `1.5px solid ${fromLibrary ? C.ink : C.border2}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0, fontFamily: FONT.mono, fontWeight: 700 }}>{fromLibrary ? "✓" : "♪"}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, color: C.ink, display: "flex", alignItems: "center", gap: 8, fontFamily: FONT.ui }}>
           {track.name}
-          {track.already_saved && !fromLibrary && <span style={{ fontSize: 10, color: C.green, background: C.greenBg, padding: "2px 6px", borderRadius: 4 }}>SAVED</span>}
+          {track.already_saved && !fromLibrary && <span style={{ fontSize: 10, color: AC_ON, background: AC, padding: "2px 6px", borderRadius: 3, fontFamily: FONT.mono, fontWeight: 700 }}>SAVED</span>}
         </div>
-        <div style={{ fontSize: 12, color: fromLibrary ? "#4a9a5a" : C.sub, marginTop: 2 }}>{track.artist}</div>
+        <div style={{ fontSize: 12, color: fromLibrary ? C.sub : C.sub, marginTop: 2, fontFamily: FONT.body }}>{track.artist}</div>
       </div>
-      <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.green, textDecoration: "none", padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.greenBd}` }}>Open ↗</a>
+      <a href={track.spotify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.ink, textDecoration: "none", padding: "5px 11px", borderRadius: 3, border: `1.5px solid ${C.ink}`, fontFamily: FONT.mono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Open ↗</a>
     </div>
   );
 }
@@ -243,12 +275,21 @@ function ForYouView() {
 
   return (
     <Reveal>
-      <div style={{ ...TYPE.micro, marginBottom: 10 }}>Quick vibe</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-        {FORYOU_VIBES.map((v) => <Pill key={v.label} active={activeVibe === v.label} onClick={() => { setActiveVibe(v.label); setVibe(v.value); }}>{v.emoji} {v.label}</Pill>)}
+      <div style={{ ...TYPE.micro, marginBottom: 12 }}>Quick vibe</div>
+      {/* Quick-vibe chips — boxy editorial, de-pilled */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+        {FORYOU_VIBES.map((v) => (
+          <button key={v.label} onClick={() => { setActiveVibe(v.label); setVibe(v.value); }} style={{
+            padding: "8px 14px", borderRadius: 3, border: `1.5px solid ${activeVibe === v.label ? C.ink : C.border2}`,
+            background: activeVibe === v.label ? C.ink : "transparent",
+            color: activeVibe === v.label ? C.bg : C.ink,
+            cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: FONT.ui,
+            transition: "all 0.15s", userSelect: "none",
+          }}>{v.emoji} {v.label}</button>
+        ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 20 }}>
         <div><div style={{ ...TYPE.micro, marginBottom: 8 }}>Describe a vibe</div><Input value={vibe} onChange={(e) => { setVibe(e.target.value); setActiveVibe(null); }} placeholder='"sad late night"' style={{ width: "100%", padding: "12px 16px", fontSize: 14 }} /></div>
         <div><div style={{ ...TYPE.micro, marginBottom: 8 }}>Start from a song you own</div><Input value={seedSong} onChange={(e) => setSeedSong(e.target.value)} placeholder='"Pyramids"' style={{ width: "100%", padding: "12px 16px", fontSize: 14 }} /></div>
       </div>
@@ -261,7 +302,22 @@ function ForYouView() {
               <div style={{ ...TYPE.micro, marginBottom: 8 }}>Language</div>
               <select value={language} onChange={(e) => setLanguage(e.target.value)} style={input({ width: "100%", cursor: "pointer" })}>{FORYOU_LANGS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</select>
             </div>
-            <div><div style={{ ...TYPE.micro, marginBottom: 8 }}>Mood</div><div style={{ display: "flex", gap: 6 }}>{["any", "happy", "dark"].map((m) => <Pill key={m} active={mood === m} onClick={() => setMood(m)} style={{ flex: 1, justifyContent: "center", textTransform: "capitalize", minHeight: 38 }}>{m}</Pill>)}</div></div>
+            {/* Mood filter — boxy editorial tags */}
+            <div>
+              <div style={{ ...TYPE.micro, marginBottom: 8 }}>Mood</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {["any", "happy", "dark"].map((m) => (
+                  <button key={m} onClick={() => setMood(m)} style={{
+                    flex: 1, padding: "8px 6px", borderRadius: 3,
+                    border: `1.5px solid ${mood === m ? C.ink : C.border2}`,
+                    background: mood === m ? C.ink : "transparent",
+                    color: mood === m ? C.bg : C.ink,
+                    cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: FONT.ui,
+                    textTransform: "capitalize", minHeight: 38, transition: "all 0.15s",
+                  }}>{m}</button>
+                ))}
+              </div>
+            </div>
             <div><div style={{ ...TYPE.micro, marginBottom: 8 }}>Min BPM</div><Input type="number" value={minTempo} onChange={(e) => setMinTempo(e.target.value)} placeholder="90" style={{ width: "100%" }} /></div>
             <div><div style={{ ...TYPE.micro, marginBottom: 8 }}>Max BPM</div><Input type="number" value={maxTempo} onChange={(e) => setMaxTempo(e.target.value)} placeholder="130" style={{ width: "100%" }} /></div>
           </div>
@@ -270,17 +326,18 @@ function ForYouView() {
 
       <Button onClick={discover} disabled={loading} style={{ width: "100%", padding: 16, fontSize: 16, marginBottom: 32 }}>{loading ? "Building your playlist…" : "Generate Playlist →"}</Button>
 
+      {/* Context data strip */}
       {ctx && !loading && (
-        <div style={{ display: "flex", gap: 28, flexWrap: "wrap", padding: "4px 2px", marginBottom: 28, ...TYPE.body, fontSize: 12 }}>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap", padding: "4px 2px", marginBottom: 28, fontFamily: FONT.mono, fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           {[["Time", `${ctx.time_of_day} (${ctx.hour}:00)`], ["Energy", `${Math.round(ctx.target_features.energy * 100)}%`], ["Mood", `${Math.round(ctx.target_features.valence * 100)}%`], ["BPM", `${Math.round(ctx.target_features.tempo)}`], ["Hour data", ctx.used_hour_data ? "✓" : "—"], ["Recent data", ctx.used_recent_data ? "✓" : "—"]].map(([l, v]) => (
-            <span key={l}>{l} <b style={{ color: "#fff" }}>{v}</b></span>
+            <span key={l}>{l} <b style={{ color: C.ink }}>{v}</b></span>
           ))}
         </div>
       )}
 
       {data?.library_matches?.length > 0 && !loading && (
         <div style={{ marginBottom: 28 }}>
-          <Department no="—" title="From Your Library" right={<span style={{ ...TYPE.micro, color: C.green }}>songs you already love</span>} />
+          <Department no="—" title="From Your Library" right={<span style={{ ...TYPE.micro, color: C.sub }}>songs you already love</span>} />
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{data.library_matches.map((t, i) => <ForYouTrack key={i} track={t} fromLibrary />)}</div>
         </div>
       )}
@@ -299,8 +356,8 @@ function ForYouView() {
 function ScoreBar({ score }) {
   const p = Math.round((score || 0) * 100);
   return (
-    <div style={{ height: 4, width: 70, background: C.border, borderRadius: 2, flexShrink: 0 }}>
-      <div style={{ height: 4, borderRadius: 2, background: p > 65 ? C.green : p > 40 ? C.amber : C.indigo, width: `${p}%`, transition: "width 0.4s" }} />
+    <div style={{ height: 4, width: 70, background: C.border2, flexShrink: 0 }}>
+      <div style={{ height: 4, background: p > 65 ? AC : p > 40 ? C.amber : C.indigo, width: `${p}%`, transition: "width 0.4s" }} />
     </div>
   );
 }
@@ -309,7 +366,14 @@ function AlbumsView() {
   const [data, setData] = useState(null); const [loading, setLoading] = useState(false);
   const [trackSort, setTrackSort] = useState("order"); // "order" | "match"
   const [onlyNew, setOnlyNew] = useState(false);
+  const [topAlbums, setTopAlbums] = useState([]);
   const tab = "explorer";
+
+  // Data-driven starting points: real albums from your library (no hardcoded picks).
+  useEffect(() => {
+    fetch(`${API}/stats/top-albums-rich?limit=12`).then((r) => r.json())
+      .then((d) => setTopAlbums(d.albums || [])).catch(() => {});
+  }, []);
 
   const exploreAlbum = async (al = albumName, ar = artistName) => {
     if (!al || !ar) return;
@@ -319,11 +383,7 @@ function AlbumsView() {
     catch { setData({ found: false, message: "Request failed — try again" }); }
     setLoading(false);
   };
-  const SUGGESTIONS = [
-    { al: "Swimming", ar: "Mac Miller" }, { al: "Blonde", ar: "Frank Ocean" },
-    { al: "DAMN.", ar: "Kendrick Lamar" }, { al: "Currents", ar: "Tame Impala" },
-  ];
-  const fitLabel = (s) => s >= 0.7 ? { text: "Strong match for your taste", color: C.green } : s >= 0.5 ? { text: "Decent fit for your taste", color: C.amber } : { text: "Outside your usual taste", color: C.indigo };
+  const fitLabel = (s) => s >= 0.7 ? { text: "Strong match for your taste", color: AC } : s >= 0.5 ? { text: "Decent fit for your taste", color: C.amber } : { text: "Outside your usual taste", color: C.indigo };
 
   let albumTracks = data?.tracks ? [...data.tracks] : [];
   if (onlyNew) albumTracks = albumTracks.filter((t) => !t.already_saved);
@@ -331,10 +391,27 @@ function AlbumsView() {
 
   return (
     <Reveal>
-      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ ...TYPE.micro, marginRight: 4 }}>Try an album</span>
-        {SUGGESTIONS.map((s) => <Pill key={s.al} active={false} onClick={() => exploreAlbum(s.al, s.ar)} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>{s.al}</Pill>)}
-      </div>
+      {/* Album Lens starters — real covers pulled from your library (data-driven, no hardcoding) */}
+      {topAlbums.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ ...TYPE.micro, marginBottom: 12 }}>Start with one of yours</div>
+          <div style={{ display: "flex", gap: 13, overflowX: "auto", paddingBottom: 6 }}>
+            {topAlbums.map((al) => (
+              <button key={`${al.album}-${al.artist}`} onClick={() => exploreAlbum(al.album, al.artist)} className="lift"
+                title={`${al.album} — ${al.artist}`}
+                style={{ flexShrink: 0, width: 98, textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
+                <div style={{ width: 98, height: 98, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}`, background: C.card2, boxShadow: RAISED_SHADOW }}>
+                  {al.cover
+                    ? <img src={al.cover} alt={al.album} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.display, fontSize: 30, fontWeight: 700, color: C.faint }}>{(al.album || "?").trim()[0]?.toUpperCase()}</div>}
+                </div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: C.ink, marginTop: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.ui }}>{al.album}</div>
+                <div style={{ fontSize: 10.5, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.body }}>{al.artist}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {tab === "explorer" && (
         <>
@@ -347,42 +424,48 @@ function AlbumsView() {
           {data && !loading && !data.found && <EmptyState title="Album not found" hint={data.message} />}
           {data?.found && !loading && (
             <>
-              <Card style={{ marginBottom: 20 }}>
+              <Card style={{ marginBottom: 20, boxShadow: RAISED_SHADOW }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
                   <div>
                     <h2 style={{ ...TYPE.section, fontSize: 24 }}>{data.album.name}</h2>
-                    <p style={{ color: C.sub, marginTop: 4 }}>{data.album.artist}</p>
-                    {data.album.tags?.length > 0 && <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>{data.album.tags.map((t) => <span key={t} style={{ fontSize: 11, color: C.sub, background: C.border, padding: "3px 10px", borderRadius: 12 }}>{t}</span>)}</div>}
+                    <p style={{ color: C.sub, marginTop: 4, fontFamily: FONT.body }}>{data.album.artist}</p>
+                    {data.album.tags?.length > 0 && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                        {data.album.tags.map((t) => (
+                          <span key={t} style={{ fontSize: 11, color: C.ink, background: AW, padding: "3px 10px", borderRadius: 3, border: `1px solid ${C.border2}`, fontFamily: FONT.mono, fontWeight: 600 }}>{t}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ ...TYPE.stat, fontSize: 30, color: fitLabel(data.taste_comparison.overall_fit).color }}>{Math.round(data.taste_comparison.overall_fit * 100)}%</div>
                     <div style={{ ...TYPE.micro, marginTop: 4 }}>taste match</div>
-                    <div style={{ fontSize: 12, color: fitLabel(data.taste_comparison.overall_fit).color, marginTop: 4 }}>{fitLabel(data.taste_comparison.overall_fit).text}</div>
+                    <div style={{ fontSize: 12, fontFamily: FONT.mono, color: fitLabel(data.taste_comparison.overall_fit).color, marginTop: 4 }}>{fitLabel(data.taste_comparison.overall_fit).text}</div>
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginTop: 20 }}>
                   {[{ label: "Energy", yours: data.taste_comparison.your_energy, album: data.taste_comparison.album_energy }, { label: "Mood", yours: data.taste_comparison.your_valence, album: data.taste_comparison.album_valence }].map((row) => (
                     <div key={row.label}>
                       <div style={{ display: "flex", justifyContent: "space-between", ...TYPE.micro, marginBottom: 6 }}><span>{row.label}</span><span>You {Math.round((row.yours || 0) * 100)}% · Album {Math.round((row.album || 0) * 100)}%</span></div>
-                      <div style={{ height: 4, background: C.border, borderRadius: 2, position: "relative" }}>
-                        <div style={{ position: "absolute", height: 4, background: C.faint, borderRadius: 2, width: `${(row.album || 0) * 100}%` }} />
-                        <div style={{ position: "absolute", height: 4, background: C.green, borderRadius: 2, width: 2, left: `${(row.yours || 0) * 100}%` }} />
+                      <div style={{ height: 4, background: C.border2, position: "relative" }}>
+                        <div style={{ position: "absolute", height: 4, background: C.faint, width: `${(row.album || 0) * 100}%` }} />
+                        <div style={{ position: "absolute", height: 4, background: AC, width: 2, left: `${(row.yours || 0) * 100}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 16, marginTop: 16, ...TYPE.body, fontSize: 12 }}><span>{data.album.track_count} tracks</span><span>{data.album.you_own} already in your library</span></div>
+                <div style={{ display: "flex", gap: 16, marginTop: 16, fontFamily: FONT.mono, fontSize: 12, color: C.sub }}><span>{data.album.track_count} tracks</span><span>{data.album.you_own} already in your library</span></div>
               </Card>
 
               {data.entry_points?.length > 0 && (
-                <Card tint={C.greenBg} style={{ border: `1px solid ${C.greenBd}`, marginBottom: 20 }}>
-                  <div style={{ ...TYPE.micro, color: C.green, marginBottom: 16 }}>Start here — best entry points for your taste</div>
+                <Card style={{ background: AW, border: `1.5px solid ${C.ink}`, marginBottom: 20, boxShadow: RAISED_SHADOW }}>
+                  <div style={{ ...TYPE.micro, color: C.ink, marginBottom: 16 }}>Start here — best entry points for your taste</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {data.entry_points.map((t, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: C.green, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{t.name}</div><div style={{ fontSize: 11, color: "#4a9a5a", marginTop: 2 }}>{Math.round(t.taste_score * 100)}% match</div></div>
-                        {t.spotify_url && <a href={t.spotify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.green, textDecoration: "none", padding: "4px 10px", border: `1px solid ${C.greenBd}`, borderRadius: 6 }}>Open ↗</a>}
+                        <div style={{ width: 26, height: 26, borderRadius: 3, background: AC, color: AC_ON, border: `1.5px solid ${C.ink}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0, fontFamily: FONT.display }}>{i + 1}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: C.ink, fontFamily: FONT.ui }}>{t.name}</div><div style={{ fontSize: 11, color: C.sub, marginTop: 2, fontFamily: FONT.mono }}>{Math.round(t.taste_score * 100)}% match</div></div>
+                        {t.spotify_url && <a href={t.spotify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.ink, textDecoration: "none", padding: "5px 10px", border: `1.5px solid ${C.ink}`, borderRadius: 3, fontFamily: FONT.mono, fontWeight: 700, textTransform: "uppercase" }}>Open ↗</a>}
                       </div>
                     ))}
                   </div>
@@ -392,25 +475,46 @@ function AlbumsView() {
               <Card>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
                   <div style={{ ...TYPE.micro }}>Full track list</div>
+                  {/* Track sort chips — boxy editorial */}
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <Pill active={trackSort === "order"} onClick={() => setTrackSort("order")} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>Album order</Pill>
-                    <Pill active={trackSort === "match"} onClick={() => setTrackSort("match")} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>Best match</Pill>
-                    <Pill active={onlyNew} onClick={() => setOnlyNew((v) => !v)} style={{ minHeight: 30, padding: "4px 11px", fontSize: 11 }}>New to me</Pill>
+                    {[["order", "Album order"], ["match", "Best match"]].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setTrackSort(val)} style={{
+                        padding: "5px 11px", borderRadius: 3,
+                        border: `1.5px solid ${trackSort === val ? C.ink : C.border2}`,
+                        background: trackSort === val ? C.ink : "transparent",
+                        color: trackSort === val ? C.bg : C.ink,
+                        cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: FONT.ui,
+                        transition: "all 0.15s",
+                      }}>{lbl}</button>
+                    ))}
+                    <button onClick={() => setOnlyNew((v) => !v)} style={{
+                      padding: "5px 11px", borderRadius: 3,
+                      border: `1.5px solid ${onlyNew ? C.ink : C.border2}`,
+                      background: onlyNew ? C.ink : "transparent",
+                      color: onlyNew ? C.bg : C.ink,
+                      cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: FONT.ui,
+                      transition: "all 0.15s",
+                    }}>New to me</button>
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {albumTracks.length === 0 && (
+                    <div style={{ ...TYPE.body, fontSize: 12.5, color: C.sub, padding: "8px 4px" }}>
+                      {onlyNew ? "You already own every track on this album — nothing new here." : "No tracks to show."}
+                    </div>
+                  )}
                   {albumTracks.map((t, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 4px" }}>
-                      <span style={{ color: C.faint, fontSize: 12, width: 20, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                      <span style={{ color: C.faint, fontSize: 12, width: 20, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums", fontFamily: FONT.mono }}>{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: t.recommended_entry ? 600 : 400, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ fontSize: 14, fontWeight: t.recommended_entry ? 600 : 400, color: C.ink, display: "flex", alignItems: "center", gap: 6, fontFamily: FONT.ui }}>
                           {t.name}
-                          {t.already_saved && <span style={{ fontSize: 10, color: C.green, background: C.greenBg, padding: "1px 5px", borderRadius: 3 }}>SAVED</span>}
-                          {t.recommended_entry && !t.already_saved && <span style={{ fontSize: 10, color: C.amber, background: C.amberBg, padding: "1px 5px", borderRadius: 3 }}>REC</span>}
+                          {t.already_saved && <span style={{ fontSize: 10, color: AC_ON, background: AC, padding: "1px 5px", borderRadius: 3, fontFamily: FONT.mono, fontWeight: 700 }}>SAVED</span>}
+                          {t.recommended_entry && !t.already_saved && <span style={{ fontSize: 10, color: C.ink, background: C.amberBg, padding: "1px 5px", borderRadius: 3, fontFamily: FONT.mono, fontWeight: 700, border: `1px solid ${C.amber}` }}>REC</span>}
                         </div>
                       </div>
                       <ScoreBar score={t.taste_score} />
-                      {t.spotify_url && <a href={t.spotify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.muted, textDecoration: "none", flexShrink: 0 }}>↗</a>}
+                      {t.spotify_url && <a href={t.spotify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.muted, textDecoration: "none", flexShrink: 0, fontFamily: FONT.mono }}>↗</a>}
                     </div>
                   ))}
                 </div>
@@ -425,25 +529,26 @@ function AlbumsView() {
 }
 
 /* ─────────────────────────── BLIND SPOTS (flip cards) ─────────────────────────── */
-const chip = { fontSize: 11, color: "#fff", background: "#151515", border: `1px solid ${C.border}`, padding: "3px 9px", borderRadius: 10, whiteSpace: "nowrap" };
-const faceHint = { marginTop: "auto", ...TYPE.micro, color: C.muted, paddingTop: 10, textAlign: "right" };
+// Editorial tag chip — boxy, ink-bordered, no lozenges.
+const chip = { fontSize: 11, color: C.ink, background: C.card2, border: `1px solid ${C.border2}`, padding: "3px 9px", borderRadius: 3, whiteSpace: "nowrap", fontFamily: FONT.mono, fontWeight: 600 };
+const faceHint = { marginTop: "auto", fontFamily: FONT.mono, fontSize: 10, color: C.muted, paddingTop: 10, textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" };
 
 function BlindFront({ spot, meaning, meaningOpen, onInfo }) {
   return (
-    <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: "100%", background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: RAISED_SHADOW }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, textTransform: "capitalize", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis" }}>{spot.genre}</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, textTransform: "capitalize", letterSpacing: "-0.01em", color: C.ink, overflow: "hidden", textOverflow: "ellipsis" }}>{spot.genre}</div>
           <button onClick={(e) => { e.stopPropagation(); onInfo(); }} aria-label="What does this mean?"
-            style={{ width: 18, height: 18, borderRadius: "50%", border: `1px solid ${C.border2}`, background: meaningOpen ? C.green : "transparent", color: meaningOpen ? "#000" : C.sub, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, lineHeight: 1 }}>i</button>
+            style={{ width: 18, height: 18, borderRadius: 3, border: `1.5px solid ${C.border2}`, background: meaningOpen ? AC : "transparent", color: meaningOpen ? AC_ON : C.sub, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, lineHeight: 1, fontFamily: FONT.mono }}>i</button>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 700, color: C.indigo }}>{spot.songs_in_library}</div>
-          <div style={{ ...TYPE.micro, color: C.faint }}>songs</div>
+          <div style={{ ...TYPE.micro, color: C.muted }}>songs</div>
         </div>
       </div>
       {meaningOpen && (
-        <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5, marginTop: 8, background: "#151515", borderRadius: 8, padding: "8px 10px" }}>
+        <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5, marginTop: 8, background: C.card2, border: `1px solid ${C.border2}`, borderRadius: 4, padding: "8px 10px", fontFamily: FONT.body }}>
           {meaning === undefined ? "Loading…" : meaning || "No quick definition found."}
         </div>
       )}
@@ -456,7 +561,7 @@ function BlindFront({ spot, meaning, meaningOpen, onInfo }) {
           <div style={{ ...TYPE.micro, marginBottom: 6 }}>Best-fit songs you own</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {spot.songs.slice(0, 3).map((s, i) => (
-              <div key={i} style={{ fontSize: 12, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ color: "#fff" }}>{s.name}</span> · {s.artist}</div>
+              <div key={i} style={{ fontSize: 12, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.body }}><span style={{ color: C.ink, fontWeight: 600 }}>{s.name}</span> · {s.artist}</div>
             ))}
           </div>
         </>
@@ -473,20 +578,21 @@ function BlindBack({ spot, det, playing, play }) {
   const rest = tracks.slice(1, 3);
   const topId = top ? `bs-${spot.genre}-${top.artist}` : null;
   return (
-    <div style={{ height: "100%", background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ ...TYPE.micro, color: C.green, marginBottom: 4 }}>Go deeper into {spot.genre}</div>
-      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 12 }}>Different artists you don't own — tap ▶ to taste the first.</div>
+    <div style={{ height: "100%", background: AW, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: RAISED_SHADOW }}>
+      <div style={{ ...TYPE.micro, color: C.ink, marginBottom: 4 }}>Go deeper into {spot.genre}</div>
+      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 12, fontFamily: FONT.body }}>Different artists you don't own — tap ▶ to taste the first.</div>
       {loading ? <div style={{ ...TYPE.body, fontSize: 12 }}>Finding artists…</div> :
         top ? (
           <>
-            <div onClick={(e) => e.stopPropagation()} style={{ borderRadius: 10, border: `1px solid ${C.greenBd}`, background: "rgba(0,0,0,0.28)", boxShadow: "0 8px 22px rgba(29,185,84,0.18)", marginBottom: 12 }}>
+            {/* "Raised/previewable" top track — amber-accented panel, dark ink text */}
+            <div onClick={(e) => e.stopPropagation()} style={{ borderRadius: 4, border: `2px solid ${AC}`, background: C.card, boxShadow: MODAL_SHADOW, marginBottom: 12 }}>
               <TrackRow track={{ id: topId, name: top.track, artist: top.artist }} playing={playing} onPlay={play} note="play next" />
             </div>
             {rest.map((t, i) => (
               <a key={i} href={`https://open.spotify.com/search/${encodeURIComponent(t.artist + " " + t.track)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", padding: "6px 4px" }}>
-                <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.green, width: 16 }}>{i + 2}</span>
-                <span style={{ flex: 1, fontSize: 13, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.track} <span style={{ color: C.sub }}>· {t.artist}</span></span>
-                <span style={{ fontSize: 11, color: C.green }}>↗</span>
+                <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.ink, width: 16 }}>{i + 2}</span>
+                <span style={{ flex: 1, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.ui }}>{t.track} <span style={{ color: C.sub }}>· {t.artist}</span></span>
+                <span style={{ fontSize: 11, color: C.sub, fontFamily: FONT.mono }}>↗</span>
               </a>
             ))}
           </>
@@ -494,9 +600,9 @@ function BlindBack({ spot, det, playing, play }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {det.recommended_artists.map((a, i) => (
               <a key={a} href={`https://open.spotify.com/search/${encodeURIComponent(a)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-                <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.green, width: 16 }}>{i + 1}</span>
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a}</span>
-                <span style={{ fontSize: 11, color: C.green }}>↗</span>
+                <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.ink, width: 16 }}>{i + 1}</span>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.ui }}>{a}</span>
+                <span style={{ fontSize: 11, color: C.sub, fontFamily: FONT.mono }}>↗</span>
               </a>
             ))}
           </div>
@@ -566,19 +672,19 @@ function BlindSpotsView() {
 /* ─────────────────────────── RABBIT HOLES (deeper) ─────────────────────────── */
 function DeeperFront({ h, rank, maxSaved, top, loaded, playing, play }) {
   return (
-    <div style={{ height: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: "100%", background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: 16, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: RAISED_SHADOW }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ ...TYPE.micro, color: C.faint }}>Nº {String(rank).padStart(2, "0")}</div>
-          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.artist}</div>
+          <div style={{ ...TYPE.micro, color: C.muted }}>Nº {String(rank).padStart(2, "0")}</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: 800, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.ink }}>{h.artist}</div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontFamily: FONT.display, fontSize: 24, fontWeight: 700, color: C.green }}>{h.songs_saved}</div>
-          <div style={{ ...TYPE.micro, color: C.faint }}>saved</div>
+          <div style={{ fontFamily: FONT.display, fontSize: 24, fontWeight: 700, color: AC }}>{h.songs_saved}</div>
+          <div style={{ ...TYPE.micro, color: C.muted }}>saved</div>
         </div>
       </div>
-      <div style={{ height: 4, background: C.border, borderRadius: 2, marginTop: 12 }}>
-        <div style={{ height: 4, borderRadius: 2, background: C.green, width: `${(h.songs_saved / maxSaved) * 100}%` }} />
+      <div style={{ height: 4, background: C.border2, marginTop: 12 }}>
+        <div style={{ height: 4, background: AC, width: `${(h.songs_saved / maxSaved) * 100}%` }} />
       </div>
       <div style={{ ...TYPE.micro, color: C.muted, marginTop: 16, marginBottom: 4 }}>
         Play next {top ? (top.plays > 0 ? "· your most-played" : "· best taste-fit") : ""}
@@ -593,16 +699,16 @@ function DeeperFront({ h, rank, maxSaved, top, loaded, playing, play }) {
 
 function DeeperBack({ h, rest }) {
   return (
-    <div style={{ height: "100%", background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ ...TYPE.micro, color: C.green, marginBottom: 12 }}>More from {h.artist}</div>
+    <div style={{ height: "100%", background: AW, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: 18, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: RAISED_SHADOW }}>
+      <div style={{ ...TYPE.micro, color: C.ink, marginBottom: 12 }}>More from {h.artist}</div>
       {rest?.length ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {rest.map((t, i) => (
             <a key={t.id || i} href={t.spotify_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-              <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.green, width: 16 }}>{i + 1}</span>
-              <span style={{ flex: 1, fontSize: 13, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
-              {t.plays > 0 && <span style={{ fontSize: 10, color: "#7bbf93" }}>{t.plays}×</span>}
-              <span style={{ fontSize: 12, color: C.green }}>↗</span>
+              <span style={{ fontFamily: FONT.display, fontSize: 13, fontWeight: 700, color: C.ink, width: 16 }}>{i + 1}</span>
+              <span style={{ flex: 1, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.ui }}>{t.name}</span>
+              {t.plays > 0 && <span style={{ fontSize: 10, color: C.sub, fontFamily: FONT.mono }}>{t.plays}×</span>}
+              <span style={{ fontSize: 12, color: C.sub, fontFamily: FONT.mono }}>↗</span>
             </a>
           ))}
         </div>
@@ -666,12 +772,6 @@ function DeeperView() {
 }
 
 /* ─────────────────────────── FIND (search + albums merged) ─────────────────────────── */
-const subTab = (active) => ({
-  padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer",
-  fontSize: 13, fontWeight: 700, fontFamily: FONT.body,
-  background: active ? C.green : "transparent", color: active ? "#000" : C.sub,
-  transition: "all 0.15s",
-});
 
 function WeatherIcon({ size = 22, color = "currentColor" }) {
   return (
@@ -690,15 +790,18 @@ function AlbumRecCard({ a }) {
   const initial = ((a.album || "?").trim()[0] || "?").toUpperCase();
   const href = a.already_saved ? null : `https://open.spotify.com/search/${encodeURIComponent(a.artist + " " + a.album)}`;
   const inner = (
-    <div style={{ background: C.card, border: `1px solid ${a.already_saved ? C.greenBd : C.border}`, borderRadius: 12, padding: 12 }}>
-      <div style={{ position: "relative", width: "100%", aspectRatio: "1 / 1", borderRadius: 8, overflow: "hidden", background: C.card2, marginBottom: 10 }}>
+    <div className="lift" style={{ background: C.card, border: `1.5px solid ${a.already_saved ? C.ink : C.line}`, borderRadius: 6, padding: 12, boxShadow: a.already_saved ? RAISED_SHADOW : "none" }}>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "1 / 1", borderRadius: 4, overflow: "hidden", background: C.card2, marginBottom: 10, border: `1px solid ${C.border}` }}>
         {a.cover
           ? <img src={a.cover} alt={a.album} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT.display, fontSize: 34, fontWeight: 700, color: C.faint }}>{initial}</div>}
+        {a.already_saved && (
+          <div style={{ position: "absolute", top: 6, left: 6, background: AC, color: AC_ON, fontSize: 9, fontFamily: FONT.mono, fontWeight: 700, padding: "2px 6px", borderRadius: 2 }}>YOURS</div>
+        )}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.album}</div>
-      <div style={{ fontSize: 11, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artist}</div>
-      <div style={{ fontSize: 10.5, color: a.already_saved ? C.green : C.muted, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.ui }}>{a.album}</div>
+      <div style={{ fontSize: 11, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.body }}>{a.artist}</div>
+      <div style={{ fontSize: 10.5, color: a.already_saved ? C.sub : C.muted, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT.mono }}>
         {a.already_saved ? `★ ${a.owned} in library` : (a.why || "new to you")}{!a.already_saved && " ↗"}
       </div>
     </div>
@@ -799,13 +902,14 @@ function RecommendStudio() {
 
   return (
     <div>
-      <Card style={{ marginBottom: 20, overflow: "visible" }}>
+      <Card style={{ marginBottom: 20, overflow: "visible", boxShadow: RAISED_SHADOW }}>
         <div style={{ ...TYPE.micro, marginBottom: 12 }}>Recommend from — add up to 2 songs or albums</div>
+        {/* Active seed chips — lime fill with ink text, boxy */}
         {seeds.length > 0 && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
             {seeds.map((s, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.greenBg, border: `1px solid ${C.greenBd}`, borderRadius: 20, padding: "6px 12px", fontSize: 12, color: "#fff" }}>
-                <span style={{ ...TYPE.micro, color: C.green }}>{s.type}</span>
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: AW, border: `1.5px solid ${C.ink}`, borderRadius: 4, padding: "6px 12px", fontSize: 12, color: C.ink, fontFamily: FONT.ui, fontWeight: 500 }}>
+                <span style={{ ...TYPE.micro, color: C.sub }}>{s.type}</span>
                 {s.name}{s.artist ? <span style={{ color: C.sub }}>· {s.artist}</span> : null}
                 <button onClick={() => setSeeds((prev) => prev.filter((_, x) => x !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
               </span>
@@ -815,50 +919,60 @@ function RecommendStudio() {
         {seeds.length < 2 && (
           <div style={{ position: "relative" }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ display: "inline-flex", gap: 4, padding: 3, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 9 }}>
+              {/* Song/Album toggle — boxy editorial */}
+              <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "transparent", border: `1.5px solid ${C.ink}`, borderRadius: 6 }}>
                 <button onClick={() => setSeedType("song")} style={subTab(seedType === "song")}>Song</button>
                 <button onClick={() => setSeedType("album")} style={subTab(seedType === "album")}>Album</button>
               </div>
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search a ${seedType} in your library…`} style={{ flex: 1, minWidth: 180 }} />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search a ${seedType} in your library…`} style={{ flex: 1, minWidth: 180, color: C.ink }} />
             </div>
             {sugs.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 6, background: "#121212", border: `1px solid ${C.border}`, borderRadius: 10, zIndex: 50, overflow: "hidden", boxShadow: "0 12px 36px rgba(0,0,0,0.6)" }}>
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 6, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 4, zIndex: 50, overflow: "hidden", boxShadow: MODAL_SHADOW }}>
                 {sugs.map((s, i) => (
-                  <button key={i} onClick={() => addSeed(s)} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", background: "none", border: "none", borderTop: i ? `1px solid ${C.border}` : "none", color: "#fff", cursor: "pointer", fontSize: 13 }}>
-                    {s.name} <span style={{ color: C.sub }}>· {s.artist}</span>
+                  <button key={i} onClick={() => addSeed(s)} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", background: "none", border: "none", borderTop: i ? `1px solid ${C.border}` : "none", color: C.ink, cursor: "pointer", fontSize: 13, fontFamily: FONT.ui }}>
+                    {s.name} <span style={{ color: C.muted }}>· {s.artist}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
         )}
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 16 }}>
           <Input value={vibeInput} onChange={(e) => setVibeInput(e.target.value)}
             placeholder="Describe it… e.g. rainy late-night bengali"
-            style={{ width: "100%", maxWidth: 340, fontSize: 12, padding: "8px 12px", minHeight: 36 }} />
+            style={{ width: "100%", maxWidth: 340, fontSize: 12, padding: "10px 14px", minHeight: 38, color: C.ink }} />
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
-          {FORYOU_VIBES.map((v) => (
-            <Pill key={v.value} active={vibeInput === v.value} onClick={() => setVibeInput(vibeInput === v.value ? "" : v.value)} style={{ minHeight: 34, padding: "6px 12px" }}>{v.emoji} {v.label}</Pill>
-          ))}
-          <Pill active={!!coords} onClick={toggleWeather} style={{ minHeight: 34, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <WeatherIcon size={14} color={coords ? "#000" : C.sub} /> Weather
-          </Pill>
+        {/* Weather Station — prominent: tune recommendations to the live sky */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", marginTop: 16, background: PANEL, border: `1.5px solid ${coords ? AC : C.border2}`, borderRadius: 6, boxShadow: SHEEN, flexWrap: "wrap" }}>
+          <div style={{ width: 42, height: 42, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: AW, border: `1px solid ${AC}`, flexShrink: 0 }}>
+            <WeatherIcon size={23} color={AC} />
+          </div>
+          <div style={{ flex: 1, minWidth: 150 }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.4px", color: AC }}>Weather Station</div>
+            <div style={{ fontFamily: FONT.display, fontSize: 16, fontWeight: 800, color: C.ink, marginTop: 3, letterSpacing: "-0.01em" }}>
+              {coords ? "Tuning to your local sky" : "Match recommendations to the sky outside"}
+            </div>
+          </div>
+          <button onClick={toggleWeather} style={btn(coords ? "ghost" : "primary", { whiteSpace: "nowrap" })}>
+            {coords ? "Weather on ✓" : "Use weather →"}
+          </button>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-          <select value={lang} onChange={(e) => setLang(e.target.value)} style={input({ minWidth: 140, fontSize: 12, color: lang ? "#fff" : C.sub })}>
+        {/* Language + mood selects */}
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+          <select value={lang} onChange={(e) => setLang(e.target.value)} style={input({ minWidth: 140, fontSize: 12, color: lang ? C.ink : C.muted })}>
             <option value="">Any language</option>
             {LANGUAGES.filter(Boolean).map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}</option>)}
           </select>
-          <select value={mood} onChange={(e) => setMood(e.target.value)} style={input({ minWidth: 140, fontSize: 12, color: mood ? "#fff" : C.sub })}>
+          <select value={mood} onChange={(e) => setMood(e.target.value)} style={input({ minWidth: 140, fontSize: 12, color: mood ? C.ink : C.muted })}>
             <option value="">Any mood</option>
             {moodList.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
         </div>
+        {/* Weather result inline — amber accent, ink text */}
         {result?.weather && (
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, background: "#151515", border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px" }}>
-            <WeatherIcon size={16} color={C.green} />
-            Tuned to your sky — <span style={{ color: "#fff" }}>{result.weather.explanation}</span>{result.weather.temperature != null ? ` · ${Math.round(result.weather.temperature)}°C` : ""}
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.sub, background: C.amberBg, border: `1px solid ${C.border2}`, borderRadius: 4, padding: "8px 12px", fontFamily: FONT.mono }}>
+            <WeatherIcon size={16} color={C.amber} />
+            Tuned to your sky — <span style={{ color: C.ink }}>{result.weather.explanation}</span>{result.weather.temperature != null ? ` · ${Math.round(result.weather.temperature)}°C` : ""}
           </div>
         )}
       </Card>
@@ -869,7 +983,7 @@ function RecommendStudio() {
         <>
           <Department no="—" title="Songs" />
           {result.songs?.owned?.length > 0 && (<>
-            <div style={{ ...TYPE.micro, color: C.green, margin: "6px 0 8px" }}>From your library</div>
+            <div style={{ ...TYPE.micro, color: C.sub, margin: "6px 0 8px" }}>From your library</div>
             {songRows(result.songs.owned, true)}
           </>)}
           {result.songs?.unowned?.length > 0 && (<>
@@ -907,9 +1021,10 @@ function FindView() {
   const [sub, setSub] = useState("recommend");
   return (
     <div>
-      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 24 }}>
+      {/* Editorial sub-tab toggle — boxy, ink-bordered */}
+      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "transparent", border: `1.5px solid ${C.ink}`, borderRadius: 6, marginBottom: 24 }}>
         <button onClick={() => setSub("recommend")} style={subTab(sub === "recommend")}>Recommend</button>
-        <button onClick={() => setSub("album")} style={subTab(sub === "album")}>Album X-ray</button>
+        <button onClick={() => setSub("album")} style={subTab(sub === "album")}>Album Lens</button>
       </div>
       {sub === "recommend" ? <RecommendStudio /> : <AlbumsView />}
     </div>
@@ -921,7 +1036,8 @@ function FrontierView() {
   const [sub, setSub] = useState("blindspots");
   return (
     <div>
-      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 24 }}>
+      {/* Editorial sub-tab toggle */}
+      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "transparent", border: `1.5px solid ${C.ink}`, borderRadius: 6, marginBottom: 24 }}>
         <button onClick={() => setSub("blindspots")} style={subTab(sub === "blindspots")}>Blind Spots</button>
         <button onClick={() => setSub("rabbit")} style={subTab(sub === "rabbit")}>Rabbit Holes</button>
       </div>
@@ -933,24 +1049,30 @@ function FrontierView() {
 /* ─────────────────────────── SHELL ─────────────────────────── */
 export default function Discover() {
   const [mode, setMode] = useState("find");
+
+  // Metallic amber tab — active = amber fill + dark ink text; inactive = transparent outline.
+  const heroTab = (active) => ({
+    padding: "8px 15px", borderRadius: 4, fontFamily: FONT.ui, fontSize: 12, fontWeight: 700,
+    textTransform: "uppercase", letterSpacing: "0.05em", cursor: "pointer",
+    background: active ? AC : "transparent",
+    color: active ? C.ink2 : C.ink,
+    border: active ? `1px solid ${AC}` : `1px solid ${C.border2}`,
+    transition: "all 0.15s",
+  });
+
   return (
-    <div style={{ background: C.bg, minHeight: "100vh" }}>
-      <div style={{ background: MOOD.dark.tint, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "52px 24px 36px" }}>
-          <PageHeader
-            kicker="Nº 03 · Discover"
-            title="Discover"
-            accent={C.indigo}
-            lede="Search your library, get recommendations tuned to your taste, and explore the edges of it."
-            actions={
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Pill active={mode === "find"} onClick={() => setMode("find")}>Find</Pill>
-                <Pill active={mode === "frontier"} onClick={() => setMode("frontier")}>Frontier</Pill>
-              </div>
-            }
-          />
-        </div>
-      </div>
+    <div style={{ background: PAGE_BG, minHeight: "100vh", "--accent": AC, "--accent-ink": AON, "--accent-wash": AW }}>
+      <Masthead
+        no="03"
+        section="Discover"
+        title="Discover"
+        lede={<>Search your library, or find new music to expand your taste</>}
+        actions={<>
+          <button style={heroTab(mode === "find")} onClick={() => setMode("find")}>Find</button>
+          <button style={heroTab(mode === "frontier")} onClick={() => setMode("frontier")}>Frontier</button>
+        </>}
+      />
+
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 24px 64px" }}>
         {mode === "find" && <FindView />}
         {mode === "frontier" && <FrontierView />}

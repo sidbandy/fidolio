@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, BackgroundTasks, Body
 import psycopg2
 import requests
 import os
+import time
 import calendar
 from datetime import datetime
 from dotenv import load_dotenv
@@ -85,6 +86,27 @@ def compute_moods(valence, energy, tempo, acousticness, danceability, instrument
 _ARTIST_IMG_CACHE = {}
 
 
+def _deezer_artist_image(name: str):
+    """(image_url | None, definitive?) — `definitive` means a successful HTTP 200 lookup.
+    Deezer rate-limits bursts (429); retry once on a throttle. Callers only CACHE when
+    definitive, so a transient failure never freezes into a permanent missing image."""
+    for _ in range(2):
+        try:
+            r = requests.get("https://api.deezer.com/search/artist",
+                             params={"q": name, "limit": 1}, timeout=8)
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                img = (data[0].get("picture_medium") or data[0].get("picture_big") or data[0].get("picture")) if data else None
+                return img, True
+            if r.status_code == 429:
+                time.sleep(0.6)
+                continue
+        except Exception:
+            pass
+        time.sleep(0.3)
+    return None, False
+
+
 @router.get("/artist-image")
 def artist_image(name: str):
     key = (name or "").strip().lower()
@@ -92,16 +114,37 @@ def artist_image(name: str):
         return {"name": name, "image": None}
     if key in _ARTIST_IMG_CACHE:
         return {"name": name, "image": _ARTIST_IMG_CACHE[key]}
-    img = None
-    try:
-        r = requests.get("https://api.deezer.com/search/artist", params={"q": name, "limit": 1}, timeout=6)
-        data = r.json().get("data", [])
-        if data:
-            img = data[0].get("picture_medium") or data[0].get("picture_big") or data[0].get("picture")
-    except Exception:
-        pass
-    _ARTIST_IMG_CACHE[key] = img
+    img, ok = _deezer_artist_image(name)
+    if ok:
+        _ARTIST_IMG_CACHE[key] = img
     return {"name": name, "image": img}
+
+
+@router.get("/artist-images")
+def artist_images(names: str):
+    """Batch sibling of /artist-image — resolve many artists in ONE request, server-paced with a
+    small worker pool so a 100-tile scroll never bursts Deezer into a rate limit. Returns
+    {lower(name): url|null}. Misses aren't cached so they can recover on a later request."""
+    raw = [n for n in (names or "").split("|") if n.strip()][:40]
+    out, todo = {}, []
+    for n in raw:
+        k = n.strip().lower()
+        if k in _ARTIST_IMG_CACHE:
+            out[k] = _ARTIST_IMG_CACHE[k]
+        else:
+            todo.append((k, n))
+    if todo:
+        from concurrent.futures import ThreadPoolExecutor
+        def one(item):
+            k, n = item
+            img, ok = _deezer_artist_image(n)
+            return k, img, ok
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            for k, img, ok in ex.map(one, todo):
+                out[k] = img
+                if ok:
+                    _ARTIST_IMG_CACHE[k] = img
+    return {"images": out}
 
 
 # ── Album covers (Deezer proxy + cache) — Top Albums + discovery studio ──

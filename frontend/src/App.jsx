@@ -26,7 +26,7 @@ function Shell() {
     });
   const marginLeft = isMobile ? 0 : collapsed ? 0 : SIDEBAR;
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: "#fff" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink }}>
       <Spine collapsed={collapsed} onToggle={toggle} />
       <main
         style={{

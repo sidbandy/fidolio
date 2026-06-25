@@ -37,12 +37,21 @@ def explore_album(
         "acousticness": float(row[4] or 0.3),
     }
 
-    # Tracks from this album already in your library
+    # Tracks from this album already in your library — pull their REAL audio features too, so
+    # per-track taste scores are accurate. ReccoBeats often returns album tracks with NO features
+    # (energy/valence all null → every score collapses to the same default), so we prefer ours.
     cur.execute("""
-        SELECT id, name FROM tracks
+        SELECT id, name, energy, valence, tempo, danceability, acousticness FROM tracks
         WHERE user_id = %s AND LOWER(album) LIKE %s
     """, (user_id, f"%{album_name.lower()}%"))
-    owned = {r[1].lower(): r[0] for r in cur.fetchall()}
+    owned_rows = cur.fetchall()
+    owned = {r[1].lower(): r[0] for r in owned_rows}
+    def _f(x): return float(x) if x is not None else None
+    owned_feats = {
+        r[1].lower(): {"energy": _f(r[2]), "valence": _f(r[3]), "tempo": _f(r[4]),
+                       "danceability": _f(r[5]), "acousticness": _f(r[6])}
+        for r in owned_rows if r[2] is not None
+    }
 
     # All your library track IDs
     cur.execute("SELECT id FROM tracks WHERE user_id = %s", (user_id,))
@@ -51,44 +60,52 @@ def explore_album(
     cur.close()
     conn.close()
 
-    # Search ReccoBeats for the album
+    def taste_score(feat):
+        if not feat:
+            return 0
+        s  = max(0, 1 - abs((feat.get("energy")       or 0.5) - taste["energy"])       * 2)
+        s += max(0, 1 - abs((feat.get("valence")       or 0.5) - taste["valence"])      * 2)
+        s += max(0, 1 - abs(((feat.get("tempo")        or 120) - taste["tempo"])        / 60))
+        s += max(0, 1 - abs((feat.get("danceability")  or 0.5) - taste["danceability"]) * 2)
+        s += max(0, 1 - abs((feat.get("acousticness")  or 0.3) - taste["acousticness"]) * 2)
+        return round(s / 5, 3)
+
+    def _artist_match(a):
+        """Does this ReccoBeats album actually belong to the requested artist?"""
+        arts = " ".join(x.get("name", "") for x in (a.get("artists") or []) if isinstance(x, dict)).lower()
+        an = artist_name.lower().strip()
+        if not arts or not an:
+            return False
+        if an in arts or arts in an:
+            return True
+        words = {w for w in an.split() if len(w) > 2}
+        return bool(words) and all(w in arts for w in words)
+
+    # Resolve the album on ReccoBeats by NAME, then STRICTLY verify the artist. The name search
+    # returns many same-titled knock-off covers by random artists, so we NEVER fall back to a
+    # random match — if nothing verifies, we build the list from YOUR library below (always the
+    # correct album, with real features).
+    rb_album, tracks_data = None, []
     try:
-        search_resp = requests.get(
-            f"{RECCOBEATS_BASE}/album/search",
-            params={"searchText": album_name, "size": 10},
-            timeout=25
-        )
-        if search_resp.status_code == 200:
-            all_albums = search_resp.json().get("content", [])
-            albums = [
-                a for a in all_albums
-                if artist_name.lower() in str(a).lower()
-            ]
-            if not albums:
-                albums = all_albums
-        else:
-            albums = []
-    except Exception as e:
-        return {"found": False, "message": f"Search error: {e}"}
-
-    if not albums:
-        return {"found": False, "message": f"Album '{album_name}' by {artist_name} not found"}
-
-    album    = albums[0]
-    album_id = album.get("id")
-
-    # Get album tracks
-    try:
-        tracks_resp = requests.get(
-            f"{RECCOBEATS_BASE}/album/{album_id}/track",
-            params={"size": 50},
-            timeout=10
-        )
-        tracks_data = tracks_resp.json().get("content", []) if tracks_resp.status_code == 200 else []
+        sr = requests.get(f"{RECCOBEATS_BASE}/album/search",
+                          params={"searchText": album_name, "size": 20}, timeout=20)
+        cand = sr.json().get("content", []) if sr.status_code == 200 else []
+        aml = album_name.lower()
+        verified = [a for a in cand if _artist_match(a)]
+        named = [a for a in verified if aml in a.get("name", "").lower() or a.get("name", "").lower() in aml]
+        rb_album = (named or verified or [None])[0]
     except Exception:
-        tracks_data = []
+        rb_album = None
 
-    # Batch fetch audio features
+    if rb_album:
+        try:
+            tr = requests.get(f"{RECCOBEATS_BASE}/album/{rb_album.get('id')}/track",
+                              params={"size": 50}, timeout=12)
+            tracks_data = tr.json().get("content", []) if tr.status_code == 200 else []
+        except Exception:
+            tracks_data = []
+
+    # Audio features for the ReccoBeats tracks (owned tracks use your DB features instead).
     track_ids    = [t.get("id") for t in tracks_data if t.get("id")]
     features_map = {}
     for i in range(0, len(track_ids), 40):
@@ -101,16 +118,6 @@ def explore_album(
                     features_map[t["id"]] = t
         except Exception:
             pass
-
-    def taste_score(feat):
-        if not feat:
-            return 0
-        s  = max(0, 1 - abs((feat.get("energy")       or 0.5) - taste["energy"])       * 2)
-        s += max(0, 1 - abs((feat.get("valence")       or 0.5) - taste["valence"])      * 2)
-        s += max(0, 1 - abs(((feat.get("tempo")        or 120) - taste["tempo"])        / 60))
-        s += max(0, 1 - abs((feat.get("danceability")  or 0.5) - taste["danceability"]) * 2)
-        s += max(0, 1 - abs((feat.get("acousticness")  or 0.3) - taste["acousticness"]) * 2)
-        return round(s / 5, 3)
 
     # Last.fm album tags
     album_tags = []
@@ -128,31 +135,54 @@ def explore_album(
         except Exception:
             pass
 
-    # Build scored track list
+    # Build the scored track list — from ReccoBeats when the album verified, else from your library.
     track_list = []
-    for track in tracks_data:
-        tid        = track.get("id")
-        feat       = features_map.get(tid, {})
-        href       = track.get("href", "")
-        spotify_id = href.split("spotify.com/track/")[-1].split("?")[0] if "spotify.com/track/" in href else None
-        name       = track.get("trackTitle") or track.get("name") or ""
-        artists    = track.get("artists") or []
-        artist_str = ", ".join(a.get("name", "") for a in artists if isinstance(a, dict))
-        score      = taste_score(feat)
+    if tracks_data:
+        for track in tracks_data:
+            tid        = track.get("id")
+            href       = track.get("href", "")
+            spotify_id = href.split("spotify.com/track/")[-1].split("?")[0] if "spotify.com/track/" in href else None
+            name       = track.get("trackTitle") or track.get("name") or ""
+            artists    = track.get("artists") or []
+            artist_str = ", ".join(a.get("name", "") for a in artists if isinstance(a, dict))
+            # prefer your real library features for owned tracks (ReccoBeats often has none for these)
+            feat       = owned_feats.get(name.lower()) or features_map.get(tid, {})
+            score      = taste_score(feat)
+            track_list.append({
+                "id":               tid,
+                "spotify_id":       spotify_id,
+                "name":             name,
+                "artist":           artist_str or artist_name,
+                "spotify_url":      f"https://open.spotify.com/track/{spotify_id}" if spotify_id else None,
+                "energy":           round(float(feat.get("energy")       or 0), 2) if feat else None,
+                "valence":          round(float(feat.get("valence")       or 0), 2) if feat else None,
+                "tempo":            round(float(feat.get("tempo")         or 0), 1) if feat else None,
+                "taste_score":      score,
+                "already_saved":    (spotify_id in library_ids if spotify_id else False) or (name.lower() in owned),
+                "recommended_entry": score > 0.65,
+            })
+    else:
+        # No trustworthy ReccoBeats match → use YOUR library's tracks for this album. Always the
+        # correct album; real features; everything here is owned by definition.
+        for r in owned_rows:
+            tid_, name = r[0], r[1]
+            feat = owned_feats.get(name.lower(), {})
+            track_list.append({
+                "id":               tid_,
+                "spotify_id":       tid_,
+                "name":             name,
+                "artist":           artist_name,
+                "spotify_url":      f"https://open.spotify.com/track/{tid_}",
+                "energy":           round(feat["energy"], 2) if feat.get("energy") is not None else None,
+                "valence":          round(feat["valence"], 2) if feat.get("valence") is not None else None,
+                "tempo":            round(feat["tempo"], 1)  if feat.get("tempo")  is not None else None,
+                "taste_score":      taste_score(feat),
+                "already_saved":    True,
+                "recommended_entry": False,
+            })
 
-        track_list.append({
-            "id":               tid,
-            "spotify_id":       spotify_id,
-            "name":             name,
-            "artist":           artist_str,
-            "spotify_url":      f"https://open.spotify.com/track/{spotify_id}" if spotify_id else None,
-            "energy":           round(float(feat.get("energy")       or 0), 2) if feat else None,
-            "valence":          round(float(feat.get("valence")       or 0), 2) if feat else None,
-            "tempo":            round(float(feat.get("tempo")         or 0), 1) if feat else None,
-            "taste_score":      score,
-            "already_saved":    (spotify_id in library_ids if spotify_id else False) or (name.lower() in owned),
-            "recommended_entry": score > 0.65,
-        })
+    if not track_list:
+        return {"found": False, "message": f"Couldn't find '{album_name}' by {artist_name}."}
 
     entry_points = sorted(
         [t for t in track_list if not t["already_saved"]],
@@ -167,7 +197,7 @@ def explore_album(
     return {
         "found": True,
         "album": {
-            "name":        album.get("name") or album_name,
+            "name":        (rb_album.get("name") if rb_album else None) or album_name,
             "artist":      artist_name,
             "tags":        album_tags,
             "track_count": len(track_list),

@@ -5,7 +5,7 @@ import { C, TYPE, FONT } from "../theme";
 export default function Expander({ label, sublabel, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ borderTop: `1px solid ${C.border}` }}>
+    <div style={{ borderTop: `1.5px solid ${C.ink}` }}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
@@ -19,7 +19,7 @@ export default function Expander({ label, sublabel, children, defaultOpen = fals
           justifyContent: "space-between",
           gap: 12,
           padding: "16px 2px",
-          color: "#fff",
+          color: C.ink,
           textAlign: "left",
         }}
       >

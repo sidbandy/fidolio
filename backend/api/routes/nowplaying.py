@@ -256,6 +256,7 @@ def get_deezer_preview(track_name: str, artist: str):
                     "preview_url": track["preview"],
                     "deezer_id":   track["id"],
                     "duration":    track.get("duration"),
+                    "album_art":   (track.get("album") or {}).get("cover_big") or (track.get("album") or {}).get("cover_medium"),
                 }
 
         # Fallback: return first result that has a preview
@@ -266,6 +267,7 @@ def get_deezer_preview(track_name: str, artist: str):
                     "preview_url":       track["preview"],
                     "deezer_id":         track["id"],
                     "duration":          track.get("duration"),
+                    "album_art":         (track.get("album") or {}).get("cover_big") or (track.get("album") or {}).get("cover_medium"),
                     "approximate_match": True,
                 }
 

@@ -21,12 +21,12 @@ export default function Modal({ open, onClose, children, width = 420 }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           background: C.card,
-          border: `1px solid ${C.border}`,
-          borderRadius: 16,
+          border: `1.5px solid ${C.ink}`,
+          borderRadius: 8,
           padding: 24,
           width,
           maxWidth: "100%",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+          boxShadow: "6px 6px 0 rgba(22,17,24,0.16)",
         }}
       >
         {children}

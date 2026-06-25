@@ -193,6 +193,7 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
                    GROUP BY release_year ORDER BY c DESC LIMIT 1""", (user_id,))
     yr = cur.fetchone()
     peak_year = int(yr[0]) if yr and yr[0] else None
+    peak_year_count = int(yr[1]) if yr and yr[0] else None
 
     cur.execute("SELECT COUNT(DISTINCT artist) FROM tracks WHERE user_id = %s", (user_id,))
     artist_count = cur.fetchone()[0]
@@ -220,6 +221,7 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
         "dominant_key": top_key,
         "signature_mood": signature_mood,
         "peak_year": peak_year,
+        "peak_year_count": peak_year_count,
         "artist_count": artist_count,
         "decade_distribution": decade_distribution,
         "rabbit_holes": rabbit_holes
@@ -298,7 +300,7 @@ def _listen_sessions(cur, user_id):
 @router.get("/top-albums-rich")
 def top_albums_rich(
     user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
-    limit: int = Query(18, le=40),
+    limit: int = Query(50, le=60),
 ):
     cached = _TOP_ALBUMS_CACHE.get(user_id)
     if cached and (time.time() - cached[0] < _TOP_ALBUMS_TTL):
