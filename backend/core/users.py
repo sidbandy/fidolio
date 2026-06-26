@@ -7,6 +7,7 @@ so `get_spotify_client(user_id)` works per-user with automatic token refresh.
 import os
 import json
 import psycopg2
+from contextlib import contextmanager
 from spotipy.cache_handler import CacheHandler
 
 DB_URL = os.getenv("DATABASE_URL")
@@ -16,11 +17,24 @@ def _conn():
     return psycopg2.connect(DB_URL)
 
 
+@contextmanager
+def _cursor():
+    """Yield a cursor and ALWAYS commit + close the connection. `with psycopg2.connect()` commits
+    but never closes — that leaked connections and could exhaust the pool. This closes every time."""
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            yield cur
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ── User CRUD ──────────────────────────────────────────────────────────────────
 def upsert_user(spotify_user_id, display_name, email, token_info):
     """Create or update a user after a successful OAuth login. Stores the token + profile.
     (`id` is the Spotify user id — the table's primary key.)"""
-    with _conn() as conn, conn.cursor() as cur:
+    with _cursor() as cur:
         cur.execute(
             """INSERT INTO users (id, display_name, email, token_info, last_login)
                    VALUES (%s, %s, %s, %s, now())
@@ -35,7 +49,7 @@ def upsert_user(spotify_user_id, display_name, email, token_info):
 
 def get_user(spotify_user_id):
     """Return the user row as a dict (token_info parsed), or None."""
-    with _conn() as conn, conn.cursor() as cur:
+    with _cursor() as cur:
         cur.execute(
             """SELECT id, display_name, email, token_info,
                       sync_status, sync_detail, saved_count, last_sync
@@ -54,7 +68,7 @@ def get_user(spotify_user_id):
 
 def save_token(spotify_user_id, token_info):
     """Persist a refreshed token (called by spotipy via DBCacheHandler)."""
-    with _conn() as conn, conn.cursor() as cur:
+    with _cursor() as cur:
         cur.execute(
             "UPDATE users SET token_info = %s WHERE id = %s",
             (json.dumps(token_info), spotify_user_id),
@@ -71,13 +85,13 @@ def set_sync_status(spotify_user_id, status, detail=None, saved_count=None, touc
     if touch_last_sync:
         sets.append("last_sync = now()")
     params.append(spotify_user_id)
-    with _conn() as conn, conn.cursor() as cur:
+    with _cursor() as cur:
         cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = %s", params)
 
 
 def list_user_ids():
     """All known user ids (for the poller to iterate every account)."""
-    with _conn() as conn, conn.cursor() as cur:
+    with _cursor() as cur:
         cur.execute("SELECT id FROM users")
         return [r[0] for r in cur.fetchall()]
 

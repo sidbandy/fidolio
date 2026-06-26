@@ -41,6 +41,35 @@ def root():
     return {"status": "Fidolio is running"}
 
 
+@app.on_event("startup")
+def _run_migrations():
+    """Apply pending schema migrations on boot so the deployed code ALWAYS has the schema it needs
+    (prevents 'works locally, broken in prod' — each .sql runs once, tracked in schema_migrations)."""
+    try:
+        import glob, psycopg2
+        mdir = os.path.join(os.path.dirname(__file__), "..", "migrations")
+        files = sorted(glob.glob(os.path.join(mdir, "*.sql")))
+        if not files:
+            return
+        conn = psycopg2.connect(os.getenv("DATABASE_URL")); conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now())")
+        for f in files:
+            name = os.path.basename(f)
+            cur.execute("SELECT 1 FROM schema_migrations WHERE name = %s", (name,))
+            if cur.fetchone():
+                continue
+            try:
+                cur.execute(open(f).read())
+                cur.execute("INSERT INTO schema_migrations (name) VALUES (%s) ON CONFLICT DO NOTHING", (name,))
+                print(f"[migrate] applied {name}")
+            except Exception as e:
+                print(f"[migrate] {name} FAILED: {e}")
+        cur.close(); conn.close()
+    except Exception as e:
+        print(f"[migrate] runner skipped: {e}")
+
+
 # ── In-app poller (hourly) ────────────────────────────────────────────────────
 # Records each user's recent plays every run (hourly) and reconciles their saved library
 # at most once a day (inside run_poller). The Procfile runs a single uvicorn worker, so there's
