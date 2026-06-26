@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { C, FONT, TYPE, SECTION, discoText, SIDEBAR, MOBILE_Q } from "../theme";
 import useMediaQuery from "../hooks/useMediaQuery";
 import NowPlaying from "./NowPlaying";
+import { useAuth } from "../context/AuthProvider";
 
 // Re-export so existing imports (App, Playlists) keep working.
 export { SIDEBAR, MOBILE_Q };
@@ -73,6 +74,7 @@ function Wordmark({ size = 34 }) {
 // ---- Desktop: fixed vertical "spine" — collapsible, with Now Playing at its foot ----
 const ROWH = 48; // uniform tab height — lets the indicator band slide cleanly between tabs
 function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
+  const auth = useAuth();
   // Active tab + travel direction (drives which way the sword sheen skews).
   const activeIndex = sections.findIndex((s) => isActive(pathname, s.to));
   const idx = activeIndex < 0 ? 0 : activeIndex;
@@ -102,6 +104,13 @@ function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
             <button onClick={onToggle} aria-label="Collapse sidebar" title="Collapse"
               style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border2}`, borderRadius: 4, width: 24, height: 24, color: C.silver, cursor: "pointer", fontSize: 12, lineHeight: 1, flexShrink: 0 }}>«</button>
           </div>
+          {auth?.user && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 12, paddingTop: 11, borderTop: `1px solid ${C.border2}` }}>
+              <span style={{ ...TYPE.micro, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "none", letterSpacing: 0 }} title={auth.user.display_name}>{auth.user.display_name}</span>
+              <button onClick={auth.logout} title="Log out"
+                style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 4, color: C.silver, cursor: "pointer", fontSize: 9.5, fontFamily: FONT.mono, letterSpacing: "0.06em", padding: "3px 8px", textTransform: "uppercase", flexShrink: 0 }}>Log out</button>
+            </div>
+          )}
         </div>
 
         {/* Edge-to-edge tabs: one full-bleed band slides to the active tab; a sharp sword gleam + a glitch/scanline pop fire as it lands. */}
@@ -166,6 +175,7 @@ function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
 // ---- Mobile: slim top bar + full-screen index overlay + bottom Now Playing bar ----
 function MobileSpine({ pathname, sections }) {
   const [open, setOpen] = useState(false);
+  const auth = useAuth();
   const current = sections.find((s) => isActive(pathname, s.to));
 
   return (
@@ -200,6 +210,13 @@ function MobileSpine({ pathname, sections }) {
               );
             })}
           </nav>
+          {auth?.user && (
+            <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1.5px solid ${C.ink}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ ...TYPE.micro, color: C.muted }}>{auth.user.display_name}</span>
+              <button onClick={() => { setOpen(false); auth.logout(); }}
+                style={{ background: "none", border: `1.5px solid ${C.ink}`, borderRadius: 4, color: C.ink, cursor: "pointer", fontSize: 12, fontFamily: FONT.mono, fontWeight: 700, letterSpacing: "0.06em", padding: "8px 14px", textTransform: "uppercase" }}>Log out</button>
+            </div>
+          )}
         </div>
       )}
 
