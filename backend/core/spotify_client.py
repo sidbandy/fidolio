@@ -75,12 +75,23 @@ def _oauth_common():
 
 def get_spotify_client(user_id=None):
     """Spotify client for a given user — token comes from the DB and spotipy auto-refreshes it.
-    With user_id=None, falls back to the legacy single-account file cache (the existing token),
-    so callers that haven't been migrated yet keep working."""
+    Falls back to the legacy single-account file cache when there's no user_id, or when the user has
+    no DB token yet (e.g. the original default account whose token lives in the .cache file)."""
     if user_id:
-        from core.users import DBCacheHandler
-        auth_manager = SpotifyOAuth(cache_handler=DBCacheHandler(user_id), **_oauth_common())
-    else:
-        bootstrap_cache()
-        auth_manager = SpotifyOAuth(cache_path=resolve_cache_path(), **_oauth_common())
-    return spotipy.Spotify(auth_manager=auth_manager)
+        from core.users import get_user, DBCacheHandler
+        u = get_user(user_id)
+        if u and u.get("token_info"):
+            return spotipy.Spotify(auth_manager=SpotifyOAuth(cache_handler=DBCacheHandler(user_id), **_oauth_common()))
+    # Legacy/default file-cache account. Match the cached token's OWN scope so a narrower legacy
+    # token (e.g. one issued before user-library-modify was added) is never invalidated — otherwise
+    # spotipy would try interactive re-auth and fail headless. New OAuth users get the full SCOPE.
+    bootstrap_cache()
+    common = _oauth_common()
+    try:
+        import json
+        scope = json.load(open(resolve_cache_path())).get("scope")
+        if scope:
+            common = {**common, "scope": scope}
+    except Exception:
+        pass
+    return spotipy.Spotify(auth_manager=SpotifyOAuth(cache_path=resolve_cache_path(), **common))

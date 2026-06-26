@@ -17,16 +17,16 @@ def get_conn():
 
 
 @router.post("/refresh-listening")
-def refresh_listening():
+def refresh_listening(user_id: str = Depends(get_current_user)):
     """
-    Poll Spotify's last 50 plays right now and record new ones, so the live
+    Poll the logged-in user's last 50 plays right now and record new ones, so the live
     'today' stats update the moment the app opens (no hard reload needed).
     Cheap — one Spotify call + a few inserts. The hourly cron does the same.
     """
     try:
         from core.spotify_client import get_spotify_client
-        sp = get_spotify_client()
-        uid = sp.current_user()["id"]
+        sp = get_spotify_client(user_id)
+        uid = user_id
         items = sp.current_user_recently_played(limit=50).get("items", [])
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -40,7 +40,7 @@ def refresh_listening():
         try:
             cur.execute(
                 """INSERT INTO listening_history (user_id, track_id, track_name, artist_name, played_at)
-                   VALUES (%s,%s,%s,%s,%s) ON CONFLICT (played_at) DO NOTHING""",
+                   VALUES (%s,%s,%s,%s,%s) ON CONFLICT (user_id, played_at) DO NOTHING""",
                 (uid, t["id"], t["name"], t["artists"][0]["name"], it["played_at"]),
             )
             if cur.rowcount > 0:
@@ -66,28 +66,28 @@ def get_wrapped(
     cur.execute("""
         SELECT artist_name, COUNT(*) as plays
         FROM listening_history
-        WHERE played_at >= NOW() - INTERVAL %s
+        WHERE user_id = %s AND played_at >= NOW() - INTERVAL %s
         GROUP BY artist_name ORDER BY plays DESC LIMIT 10
-    """, (interval,))
+    """, (user_id, interval))
     top_artists = [{"artist": r[0], "plays": r[1]} for r in cur.fetchall()]
     cur.execute("""
         SELECT track_name, artist_name, COUNT(*) as plays
         FROM listening_history
-        WHERE played_at >= NOW() - INTERVAL %s
+        WHERE user_id = %s AND played_at >= NOW() - INTERVAL %s
         GROUP BY track_name, artist_name ORDER BY plays DESC LIMIT 10
-    """, (interval,))
+    """, (user_id, interval))
     top_songs = [{"track": r[0], "artist": r[1], "plays": r[2]} for r in cur.fetchall()]
     cur.execute("""
         SELECT COUNT(*) * 3.5 FROM listening_history
-        WHERE played_at >= NOW() - INTERVAL %s
-    """, (interval,))
+        WHERE user_id = %s AND played_at >= NOW() - INTERVAL %s
+    """, (user_id, interval))
     total_minutes = cur.fetchone()[0] or 0
     cur.execute("""
         SELECT EXTRACT(hour FROM played_at) as hour, COUNT(*) as plays
         FROM listening_history
-        WHERE played_at >= NOW() - INTERVAL %s
+        WHERE user_id = %s AND played_at >= NOW() - INTERVAL %s
         GROUP BY hour ORDER BY hour
-    """, (interval,))
+    """, (user_id, interval))
     clock = {int(r[0]): r[1] for r in cur.fetchall()}
     listening_clock = [{"hour": h, "plays": clock.get(h, 0)} for h in range(24)]
     cur.close()
@@ -104,15 +104,16 @@ def get_wrapped(
 def all_time_stats(user_id: str = Depends(get_current_user)):
     conn = get_conn()
     cur  = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM listening_history")
+    cur.execute("SELECT COUNT(*) FROM listening_history WHERE user_id = %s", (user_id,))
     total_plays = cur.fetchone()[0]
     cur.execute("""
         SELECT artist_name, COUNT(*) as plays
         FROM listening_history
+        WHERE user_id = %s
         GROUP BY artist_name ORDER BY plays DESC LIMIT 5
-    """)
+    """, (user_id,))
     top_artists = [{"artist": r[0], "plays": r[1]} for r in cur.fetchall()]
-    cur.execute("SELECT MIN(played_at), MAX(played_at) FROM listening_history")
+    cur.execute("SELECT MIN(played_at), MAX(played_at) FROM listening_history WHERE user_id = %s", (user_id,))
     row = cur.fetchone()
     first_play, last_play = row
     cur.close()

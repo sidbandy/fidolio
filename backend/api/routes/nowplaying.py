@@ -1,8 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import psycopg2, requests, os
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
+from api.deps import get_current_user
+from core.spotify_client import get_spotify_client
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
@@ -41,10 +43,10 @@ def get_conn():
 
 
 @router.get("/current")
-def get_current_track():
-    """What's currently playing on your Spotify."""
+def get_current_track(current_user: str = Depends(get_current_user)):
+    """What's currently playing on the logged-in user's Spotify."""
     try:
-        sp = get_spotify()
+        sp = get_spotify_client(current_user)
         current = sp.currently_playing()
         if not current or not current.get("item"):
             return {"playing": False}
@@ -64,8 +66,8 @@ def get_current_track():
         cur = conn.cursor()
         cur.execute("""
             SELECT energy, valence, tempo, danceability, acousticness
-            FROM tracks WHERE id = %s
-        """, (track_id,))
+            FROM tracks WHERE id = %s AND user_id = %s
+        """, (track_id, current_user))
         row = cur.fetchone()
         cur.close()
         conn.close()

@@ -83,13 +83,38 @@ def _enrich(cur, conn, spotify_ids):
         time.sleep(0.3)
 
 
-def sync_saved_tracks(verbose=True):
-    sp = get_spotify_client()
-    user_id = sp.current_user()["id"]
+_FEAT_COLS = ("reccobeats_id", "tempo", "energy", "valence", "danceability", "acousticness",
+              "speechiness", "loudness", "instrumentalness", "liveness", "track_key", "mode")
+
+def _copy_existing_features(cur, conn, user_id, ids):
+    """For tracks already enriched under ANOTHER user, copy those features into this user's rows
+    (skips re-hitting ReccoBeats for popular songs). Returns the ids still needing fresh enrichment."""
+    if not ids:
+        return []
+    cur.execute(f"""
+        SELECT DISTINCT ON (id) id, {", ".join(_FEAT_COLS)}
+        FROM tracks WHERE id = ANY(%s) AND energy IS NOT NULL ORDER BY id
+    """, (ids,))
+    rows = cur.fetchall()
+    sets = ", ".join(f"{c}=%s" for c in _FEAT_COLS)
+    copied = set()
+    for r in rows:
+        cur.execute(f"UPDATE tracks SET {sets} WHERE user_id=%s AND id=%s", (*r[1:], user_id, r[0]))
+        copied.add(r[0])
+    conn.commit()
+    return [i for i in ids if i not in copied]
+
+
+def sync_saved_tracks(user_id=None, verbose=True, progress=None):
+    sp = get_spotify_client(user_id)
+    if not user_id:
+        user_id = sp.current_user()["id"]
     conn = psycopg2.connect(DB_URL); cur = conn.cursor()
 
     cur.execute("SELECT id FROM tracks WHERE user_id = %s", (user_id,))
     known = {r[0] for r in cur.fetchall()}
+    if progress:
+        progress("syncing", detail="reading your saved tracks")
 
     offset, new_items = 0, []
     while True:
@@ -117,7 +142,7 @@ def sync_saved_tracks(verbose=True):
                 INSERT INTO tracks (id, user_id, name, artist, album, saved_at,
                                     preview_url, release_year, language)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (id) DO NOTHING
+                ON CONFLICT (user_id, id) DO NOTHING
             """, (t["id"], user_id, t["name"], t["artists"][0]["name"],
                   t["album"]["name"], it["added_at"], t.get("preview_url"),
                   _parse_year(t["album"].get("release_date")), lang))
@@ -127,12 +152,20 @@ def sync_saved_tracks(verbose=True):
             pass
     conn.commit()
 
+    total = len(known) + len(new_ids)
+    if progress:
+        progress("enriching", detail=f"{len(new_ids)} new tracks", saved=total)
+
     if new_ids:
-        _enrich(cur, conn, new_ids)
+        need_enrich = _copy_existing_features(cur, conn, user_id, new_ids)
+        if need_enrich:
+            _enrich(cur, conn, need_enrich)
 
     cur.close(); conn.close()
+    if progress:
+        progress("ready", saved=total, last_sync=True)
     if verbose:
-        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] library sync: "
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] library sync ({user_id}): "
               f"{len(new_ids)} new tracks added"
               + (" + enriched" if new_ids else ""))
     return len(new_ids)

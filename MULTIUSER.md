@@ -51,7 +51,16 @@ Goal: any allow-listed friend logs in with Spotify, sees **their own** data, app
       Converted ~46 sites across stats/library/search/discovery/albums/playlists (Query→Depends +
       Pydantic-body override `body.user_id = current_user`). collab uses explicit params (untouched).
       nowplaying `/current` deferred to Phase 3 (needs per-user Spotify client). Verified non-breaking.
-- [ ] Phase 2b — nowplaying `/current` per-user (folded into Phase 3)
-- [ ] Phase 3 — per-user sync
+- [x] Phase 3 — per-user sync + multi-user data model. Verified.
+      • Migration 002: tracks PK → (user_id, id) so users can share songs.
+      • Migration 003: listening_history UNIQUE → (user_id, played_at).
+      • sync_library.sync_saved_tracks(user_id, progress=…) + feature-copy (inherit a popular
+        song's features from another user instead of re-hitting ReccoBeats).
+      • core/user_sync.start_first_sync (background, progressive sync_status).
+      • run_poller loops all users; nowplaying /current per-user; get_spotify_client matches a
+        legacy token's scope (no re-auth) and uses DB token for OAuth users.
+      • Fixed listening-history LEAKS: /stats/all-time, /stats/wrapped, /stats/refresh-listening
+        were unscoped → a new user saw Sid's plays. Now per-user. Audited all tracks/listening
+        queries; verified an empty new user sees only their own (empty) data.
 - [ ] Phase 4 — frontend gate
 - [ ] Phase 5 — deploy + allowlist
