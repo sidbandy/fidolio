@@ -3,17 +3,17 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const AuthContext = createContext(null);
 
-// status: "loading" | "anon" | "authed"
+// status: "loading" | "guest" (exploring the owner's demo) | "authed" (logged in as themselves)
 export function AuthProvider({ children }) {
-  const [state, setState] = useState({ status: "loading", user: null });
+  const [state, setState] = useState({ status: "loading", user: null, demoOwner: null });
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/auth/me`);
-      if (r.ok) setState({ status: "authed", user: await r.json() });
-      else setState({ status: "anon", user: null });
+      const d = await (await fetch(`${API}/auth/me`)).json();
+      if (d.authenticated) setState({ status: "authed", user: d, demoOwner: null });
+      else setState({ status: "guest", user: null, demoOwner: d.demo_owner });
     } catch {
-      setState({ status: "anon", user: null });
+      setState({ status: "guest", user: null, demoOwner: null });
     }
   }, []);
 
@@ -22,11 +22,11 @@ export function AuthProvider({ children }) {
   const login = () => { window.location.href = `${API}/auth/login`; };
   const logout = async () => {
     try { await fetch(`${API}/auth/logout`, { method: "POST" }); } catch {}
-    setState({ status: "anon", user: null });
+    setState({ status: "guest", user: null, demoOwner: state.demoOwner });
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, refresh, login, logout }}>
+    <AuthContext.Provider value={{ ...state, isGuest: state.status === "guest", refresh, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

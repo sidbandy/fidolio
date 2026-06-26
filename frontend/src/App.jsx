@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { C, FONT, discoText } from "./theme";
+import { C, FONT, TYPE, discoText } from "./theme";
 import useMediaQuery from "./hooks/useMediaQuery";
 import Spine, { SIDEBAR, MOBILE_Q } from "./components/Spine";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { PreviewProvider } from "./context/PreviewProvider";
 import { AuthProvider, useAuth } from "./context/AuthProvider";
-import Login from "./components/Login";
 import SyncGate from "./components/SyncGate";
 
 // The five magazine sections
@@ -17,9 +16,28 @@ import Chronicle from "./pages/Chronicle";
 import Studio from "./pages/Studio";
 import CollabPage from "./pages/Collab"; // shared collab-room deep links
 
+function DemoBanner() {
+  const { demoOwner, login } = useAuth();
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap",
+      padding: "8px 18px", background: "linear-gradient(90deg, rgba(29,185,84,0.17), rgba(29,185,84,0.09))",
+      borderBottom: `1px solid ${C.border2}`, position: "sticky", top: 0, zIndex: 120, backdropFilter: "blur(6px)" }}>
+      <span style={{ fontFamily: FONT.mono, fontSize: 12.5, color: C.ink }}>
+        ✦ You're exploring <b>{demoOwner || "the owner"}'s</b> Fidolio — a live demo.
+      </span>
+      <button onClick={login} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#1DB954",
+        color: "#0B0C0F", border: "none", borderRadius: 999, padding: "6px 15px", fontFamily: FONT.ui,
+        fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+        Log in with Spotify to see yours →
+      </button>
+    </div>
+  );
+}
+
 function Shell() {
   const isMobile = useMediaQuery(MOBILE_Q);
   const { pathname } = useLocation();
+  const { status } = useAuth();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("fidolio_spine_collapsed") === "1");
   const toggle = () =>
     setCollapsed((c) => {
@@ -40,6 +58,7 @@ function Shell() {
           transition: "margin-left 0.3s ease",
         }}
       >
+        {status === "guest" && <DemoBanner />}
         <ErrorBoundary key={pathname}>
         <Routes>
           {/* Sections */}
@@ -77,16 +96,15 @@ function Splash() {
   );
 }
 
-// Auth gate: anon → Login; brand-new user with no tracks yet → SyncGate; otherwise the app.
+// Auth gate: guests explore the owner's demo (the app, with a banner); a brand-new logged-in user
+// with no tracks yet sees SyncGate; everyone else gets the full app with their own data.
 function Gate() {
   const { status, user } = useAuth();
   if (status === "loading") return <Splash />;
-  if (status === "anon") {
-    const err = new URLSearchParams(window.location.search).get("auth_error");
-    return <Login error={err} />;
+  if (status === "authed") {
+    const hasData = user?.sync_status === "ready" || (user?.saved_count || 0) > 0;
+    if (!hasData) return <SyncGate />;
   }
-  const hasData = user?.sync_status === "ready" || (user?.saved_count || 0) > 0;
-  if (!hasData) return <SyncGate />;
   return <Shell />;
 }
 

@@ -19,7 +19,7 @@ Condition fields
 """
 
 from fastapi import APIRouter, Query, Depends
-from api.deps import get_current_user
+from api.deps import get_current_user, require_user
 from pydantic import BaseModel
 from typing import Optional
 import psycopg2, json, os, requests
@@ -393,7 +393,7 @@ def curate(body: CurateBody, current_user: str = Depends(get_current_user)):
 
 
 @router.post("/from-tracks")
-def create_from_tracks(body: FromTracksBody, current_user: str = Depends(get_current_user)):
+def create_from_tracks(body: FromTracksBody, current_user: str = Depends(require_user)):
     body.user_id = current_user
     """Create a one-off Spotify playlist from an explicit list of track IDs.
     Used by Search → 'Save as Playlist'. Not rule-managed (no rotation/sync)."""
@@ -648,7 +648,7 @@ def list_playlists(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/")
-def create_playlist(body: SaveBody, current_user: str = Depends(get_current_user)):
+def create_playlist(body: SaveBody, current_user: str = Depends(require_user)):
     body.user_id = current_user
     mode = (body.spotify_mode or "new").lower()
     playlist_id = normalize_playlist_id(body.playlist_id)
@@ -741,7 +741,7 @@ def create_playlist(body: SaveBody, current_user: str = Depends(get_current_user
 
 
 @router.put("/{smart_id}")
-def update_playlist(smart_id: int, body: SaveBody, current_user: str = Depends(get_current_user)):
+def update_playlist(smart_id: int, body: SaveBody, current_user: str = Depends(require_user)):
     body.user_id = current_user
     mode = (body.spotify_mode or "keep").lower()
     incoming_pid = normalize_playlist_id(body.playlist_id)
@@ -840,7 +840,7 @@ def update_playlist(smart_id: int, body: SaveBody, current_user: str = Depends(g
 
 
 @router.delete("/{smart_id}")
-def delete_playlist(smart_id: int, user_id: str = Depends(get_current_user)):
+def delete_playlist(smart_id: int, user_id: str = Depends(require_user)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("DELETE FROM smart_playlists WHERE id=%s AND user_id=%s", (smart_id, user_id))
     conn.commit(); cur.close(); conn.close()
@@ -850,7 +850,7 @@ def delete_playlist(smart_id: int, user_id: str = Depends(get_current_user)):
 # ─── Sync ─────────────────────────────────────────────────────────────────────
 
 @router.post("/{smart_id}/sync")
-def sync_playlist(smart_id: int, user_id: str = Depends(get_current_user)):
+def sync_playlist(smart_id: int, user_id: str = Depends(require_user)):
     """Re-run the rule and replace the linked Spotify playlist entirely."""
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
@@ -892,7 +892,7 @@ def sync_playlist(smart_id: int, user_id: str = Depends(get_current_user)):
 # ─── Rotate ───────────────────────────────────────────────────────────────────
 
 @router.post("/{smart_id}/rotate")
-def rotate_playlist(smart_id: int, body: RotateBody, current_user: str = Depends(get_current_user)):
+def rotate_playlist(smart_id: int, body: RotateBody, current_user: str = Depends(require_user)):
     body.user_id = current_user
     """
     Swap the lowest-scoring tracks for fresh ones that still fit the playlist's vibe.

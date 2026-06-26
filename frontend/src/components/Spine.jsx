@@ -104,13 +104,18 @@ function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
             <button onClick={onToggle} aria-label="Collapse sidebar" title="Collapse"
               style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border2}`, borderRadius: 4, width: 24, height: 24, color: C.silver, cursor: "pointer", fontSize: 12, lineHeight: 1, flexShrink: 0 }}>«</button>
           </div>
-          {auth?.user && (
+          {auth?.user ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 12, paddingTop: 11, borderTop: `1px solid ${C.border2}` }}>
               <span style={{ ...TYPE.micro, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "none", letterSpacing: 0 }} title={auth.user.display_name}>{auth.user.display_name}</span>
               <button onClick={auth.logout} title="Log out"
                 style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 4, color: C.silver, cursor: "pointer", fontSize: 9.5, fontFamily: FONT.mono, letterSpacing: "0.06em", padding: "3px 8px", textTransform: "uppercase", flexShrink: 0 }}>Log out</button>
             </div>
-          )}
+          ) : auth?.isGuest ? (
+            <div style={{ marginTop: 12, paddingTop: 11, borderTop: `1px solid ${C.border2}` }}>
+              <button onClick={auth.login} title="Log in with Spotify"
+                style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#1DB954", color: "#0B0C0F", border: "none", borderRadius: 6, padding: "9px 10px", fontFamily: FONT.ui, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Log in with Spotify</button>
+            </div>
+          ) : null}
         </div>
 
         {/* Edge-to-edge tabs: one full-bleed band slides to the active tab; a sharp sword gleam + a glitch/scanline pop fire as it lands. */}
@@ -210,13 +215,18 @@ function MobileSpine({ pathname, sections }) {
               );
             })}
           </nav>
-          {auth?.user && (
+          {auth?.user ? (
             <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1.5px solid ${C.ink}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <span style={{ ...TYPE.micro, color: C.muted }}>{auth.user.display_name}</span>
               <button onClick={() => { setOpen(false); auth.logout(); }}
                 style={{ background: "none", border: `1.5px solid ${C.ink}`, borderRadius: 4, color: C.ink, cursor: "pointer", fontSize: 12, fontFamily: FONT.mono, fontWeight: 700, letterSpacing: "0.06em", padding: "8px 14px", textTransform: "uppercase" }}>Log out</button>
             </div>
-          )}
+          ) : auth?.isGuest ? (
+            <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1.5px solid ${C.ink}` }}>
+              <button onClick={() => { setOpen(false); auth.login(); }}
+                style={{ width: "100%", background: "#1DB954", border: "none", borderRadius: 6, color: "#0B0C0F", cursor: "pointer", fontSize: 13, fontFamily: FONT.ui, fontWeight: 800, padding: "12px 14px" }}>Log in with Spotify</button>
+            </div>
+          ) : null}
         </div>
       )}
 

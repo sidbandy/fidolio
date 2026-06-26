@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, Depends
-from api.deps import get_current_user
+from api.deps import get_current_user, require_user
 from typing import Literal
 import psycopg2
 import os
@@ -17,7 +17,7 @@ def get_conn():
 
 
 @router.post("/refresh-listening")
-def refresh_listening(user_id: str = Depends(get_current_user)):
+def refresh_listening(user_id: str = Depends(require_user)):
     """
     Poll the logged-in user's last 50 plays right now and record new ones, so the live
     'today' stats update the moment the app opens (no hard reload needed).

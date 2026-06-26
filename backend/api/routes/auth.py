@@ -69,20 +69,23 @@ def callback(code: str = None, error: str = None):
 
 @router.get("/me")
 def me(request: Request):
-    """Who is this browser? Drives the frontend auth gate + 'warming up' progress."""
+    """Who is this browser? Logged-in users get their profile + sync progress; guests get a flag and
+    the demo owner's name (everyone can explore the owner's library read-only — Spotify dev mode caps
+    real logins)."""
     uid = verify(request.cookies.get(COOKIE_NAME, ""))
-    if not uid:
-        raise HTTPException(status_code=401, detail="not authenticated")
-    u = get_user(uid)
-    if not u:
-        raise HTTPException(status_code=401, detail="unknown user")
-    return {
-        "user_id":      u["spotify_user_id"],
-        "display_name": u["display_name"],
-        "sync_status":  u["sync_status"],
-        "sync_detail":  u["sync_detail"],
-        "saved_count":  u["saved_count"],
-    }
+    u = get_user(uid) if uid else None
+    if u:
+        return {
+            "authenticated": True,
+            "user_id":       u["spotify_user_id"],
+            "display_name":  u["display_name"],
+            "sync_status":   u["sync_status"],
+            "sync_detail":   u["sync_detail"],
+            "saved_count":   u["saved_count"],
+        }
+    from api.deps import DEFAULT_USER_ID
+    demo = get_user(DEFAULT_USER_ID)
+    return {"authenticated": False, "demo_owner": (demo or {}).get("display_name") or "Fidolio"}
 
 
 @router.post("/logout")

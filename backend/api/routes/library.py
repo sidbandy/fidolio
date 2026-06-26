@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, BackgroundTasks, Body, Depends
-from api.deps import get_current_user
+from api.deps import get_current_user, require_user
 import psycopg2
 import requests
 import os
@@ -224,7 +224,7 @@ def enrich_status(user_id: str = Depends(get_current_user)):
 
 @router.post("/enrich-backfill")
 def enrich_backfill(background_tasks: BackgroundTasks,
-                    user_id: str = Depends(get_current_user),
+                    user_id: str = Depends(require_user),
                     limit: int = Query(600, le=3000)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""SELECT id FROM tracks WHERE user_id = %s AND reccobeats_id IS NULL
@@ -240,7 +240,7 @@ def enrich_backfill(background_tasks: BackgroundTasks,
 
 
 @router.post("/unsave")
-def unsave_tracks(payload: dict = Body(...), user_id: str = Depends(get_current_user)):
+def unsave_tracks(payload: dict = Body(...), user_id: str = Depends(require_user)):
     """Swipe-to-remove: un-save tracks from the Spotify library + drop them locally
     so dead-saves/duplicates stay in sync. Needs the user-library-modify scope on the
     cached token (re-authorize once if Spotify rejects it)."""
@@ -400,7 +400,7 @@ def list_monthly_playlists(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/monthly-playlists/sync-current")
-def sync_current_month(user_id: str = Depends(get_current_user)):
+def sync_current_month(user_id: str = Depends(require_user)):
     """Create or refresh the playlist for the current calendar month."""
     now = datetime.now()
     sp  = get_spotify()
@@ -418,7 +418,7 @@ def _run_saved_sync():
 
 
 @router.post("/sync-saved")
-def sync_saved(background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+def sync_saved(background_tasks: BackgroundTasks, user_id: str = Depends(require_user)):
     """
     Manually pull newly-saved Spotify tracks into the library (incremental) — the
     same sync the cron (run_poller.py) runs every 30 min. Verifies the Spotify
