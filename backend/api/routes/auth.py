@@ -13,7 +13,7 @@ from spotipy.cache_handler import MemoryCacheHandler
 
 from core.spotify_client import _oauth_common
 from core.users import upsert_user, get_user
-from core.session import sign, verify, COOKIE_NAME, MAX_AGE
+from core.session import sign, verify, token_from_request, COOKIE_NAME, MAX_AGE
 
 router = APIRouter()
 
@@ -61,8 +61,12 @@ def callback(code: str = None, error: str = None):
         except Exception:
             pass
 
-    resp = RedirectResponse(FRONTEND_URL)
-    resp.set_cookie(COOKIE_NAME, sign(uid), max_age=MAX_AGE,
+    # Pass the session token in the redirect FRAGMENT (the frontend stores it and sends it as a Bearer
+    # header — reliable across the Vercel↔Railway domain split where third-party cookies are blocked).
+    # Also set the cookie as a same-site fallback.
+    token = sign(uid)
+    resp = RedirectResponse(f"{FRONTEND_URL}/#session={token}")
+    resp.set_cookie(COOKIE_NAME, token, max_age=MAX_AGE,
                     httponly=True, secure=_SECURE, samesite=_SAMESITE, path="/")
     return resp
 
@@ -72,7 +76,7 @@ def me(request: Request):
     """Who is this browser? Logged-in users get their profile + sync progress; guests get a flag and
     the demo owner's name (everyone can explore the owner's library read-only — Spotify dev mode caps
     real logins)."""
-    uid = verify(request.cookies.get(COOKIE_NAME, ""))
+    uid = verify(token_from_request(request))
     u = get_user(uid) if uid else None
     if u:
         return {

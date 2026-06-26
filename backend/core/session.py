@@ -51,3 +51,15 @@ def verify(token: str, max_age: int = MAX_AGE):
         return user_id or None
     except Exception:
         return None
+
+
+def token_from_request(request) -> str:
+    """Get the session token from the `Authorization: Bearer` header (reliable cross-site, immune to
+    third-party-cookie blocking) or, failing that, the cookie. Duck-typed on a Starlette Request."""
+    auth = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+    if auth[:7].lower() == "bearer ":
+        return auth[7:].strip()
+    try:
+        return request.cookies.get(COOKIE_NAME, "") or ""
+    except Exception:
+        return ""

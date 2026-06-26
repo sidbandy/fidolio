@@ -8,6 +8,7 @@ import { PreviewProvider } from "./context/PreviewProvider";
 import { AuthProvider, useAuth } from "./context/AuthProvider";
 import Login from "./components/Login";
 import SyncGate from "./components/SyncGate";
+import AccessGate from "./components/AccessGate";
 
 // The five magazine sections
 import Identity from "./pages/Identity";
@@ -17,19 +18,21 @@ import Chronicle from "./pages/Chronicle";
 import Studio from "./pages/Studio";
 import CollabPage from "./pages/Collab"; // shared collab-room deep links
 
+// Non-sticky so it scrolls up and out of view (the persistent sidebar carries the same context,
+// so we don't pin two copies). Guest-only; gone the moment a user is authed.
 function DemoBanner() {
-  const { demoOwner, login } = useAuth();
+  const { demoOwner, beginSignIn } = useAuth();
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap",
       padding: "8px 18px", background: "linear-gradient(90deg, rgba(29,185,84,0.17), rgba(29,185,84,0.09))",
-      borderBottom: `1px solid ${C.border2}`, position: "sticky", top: 0, zIndex: 120, backdropFilter: "blur(6px)" }}>
+      borderBottom: `1px solid ${C.border2}` }}>
       <span style={{ fontFamily: FONT.mono, fontSize: 12.5, color: C.ink }}>
         ✦ You're exploring <b>{demoOwner || "the owner"}'s</b> Fidolio — a live demo.
       </span>
-      <button onClick={login} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#1DB954",
-        color: "#0B0C0F", border: "none", borderRadius: 999, padding: "6px 15px", fontFamily: FONT.ui,
-        fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-        Log in with Spotify to see yours →
+      <button onClick={beginSignIn} style={{ background: "none", border: "none", color: "#1DB954",
+        fontFamily: FONT.mono, fontSize: 12, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer",
+        textDecoration: "underline", textUnderlineOffset: 3, whiteSpace: "nowrap" }}>
+        Have an access code? →
       </button>
     </div>
   );
@@ -102,14 +105,19 @@ function Splash() {
 function Gate() {
   const { status, user, demoOwner } = useAuth();
   const [enteredDemo, setEnteredDemo] = useState(() => sessionStorage.getItem("fidolio_demo") === "1");
+  const authError = new URLSearchParams(window.location.search).get("auth_error");
   if (status === "loading") return <Splash />;
   if (status === "authed") {
     const hasData = user?.sync_status === "ready" || (user?.saved_count || 0) > 0;
     return hasData ? <Shell /> : <SyncGate />;
   }
-  // guest: landing page first, then the live demo (sidebar handles login)
-  if (!enteredDemo) {
-    return <Login owner={demoOwner} onDemo={() => { sessionStorage.setItem("fidolio_demo", "1"); setEnteredDemo(true); }} />;
+  // guest: the landing/login screen (also shown if Spotify refused the login), then the live demo
+  if (authError || !enteredDemo) {
+    return <Login owner={demoOwner} authError={authError} onDemo={() => {
+      if (authError) window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.setItem("fidolio_demo", "1");
+      setEnteredDemo(true);
+    }} />;
   }
   return <Shell />;
 }
@@ -120,6 +128,7 @@ export default function App() {
       <PreviewProvider>
         <BrowserRouter>
           <Gate />
+          <AccessGate />
         </BrowserRouter>
       </PreviewProvider>
     </AuthProvider>

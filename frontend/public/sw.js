@@ -2,7 +2,11 @@
 // Enables "Add to Home Screen" without serving stale data:
 // API calls and navigations always hit the network; we only fall back
 // to a cached app shell when offline.
-const SHELL = "fidolio-shell-v1";
+// v2: only ever cache SAME-ORIGIN static assets. The backend (auth + all API) is a
+// different origin, so cross-origin requests bypass the SW entirely — this fixes login
+// silently failing because a stale cached /auth/me (a guest response) was served after
+// sign-in. Bumping the cache name also evicts any poisoned v1 /auth/me from existing installs.
+const SHELL = "fidolio-shell-v2";
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
@@ -20,8 +24,11 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const { request } = e;
-  // Never cache API traffic — always live data
-  if (request.method !== "GET" || /\/(library|stats|search|discovery|nowplaying|albums|collab|playlists)\b/.test(request.url)) {
+  const url = new URL(request.url);
+  // Only ever touch same-origin GETs. ALL backend traffic (auth + every API call) is
+  // cross-origin, so it passes straight through to the network and is never cached —
+  // this is what keeps /auth/me live so login state updates the instant you sign in.
+  if (request.method !== "GET" || url.origin !== self.location.origin) {
     return; // let the browser handle it normally
   }
   // For navigations, try network, fall back to cached shell when offline

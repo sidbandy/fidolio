@@ -105,14 +105,12 @@ function DesktopSpine({ pathname, sections, collapsed, onToggle }) {
               style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border2}`, borderRadius: 4, width: 24, height: 24, color: C.silver, cursor: "pointer", fontSize: 12, lineHeight: 1, flexShrink: 0 }}>«</button>
           </div>
           {auth?.user ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 12, paddingTop: 11, borderTop: `1px solid ${C.border2}` }}>
-              <span style={{ ...TYPE.micro, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "none", letterSpacing: 0 }} title={auth.user.display_name}>{auth.user.display_name}</span>
-              <button onClick={auth.logout} title="Log out"
-                style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 4, color: C.silver, cursor: "pointer", fontSize: 9.5, fontFamily: FONT.mono, letterSpacing: "0.06em", padding: "3px 8px", textTransform: "uppercase", flexShrink: 0 }}>Log out</button>
+            <div style={{ marginTop: 12, paddingTop: 11, borderTop: `1px solid ${C.border2}` }}>
+              <span style={{ ...TYPE.micro, color: C.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "none", letterSpacing: 0, display: "block" }} title={auth.user.display_name}>{auth.user.display_name}</span>
             </div>
           ) : auth?.isGuest ? (
             <div style={{ marginTop: 12, paddingTop: 11, borderTop: `1px solid ${C.border2}` }}>
-              <button onClick={auth.login} title="Log in with Spotify"
+              <button onClick={auth.beginSignIn} title="Log in with Spotify"
                 style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#1DB954", color: "#0B0C0F", border: "none", borderRadius: 6, padding: "9px 10px", fontFamily: FONT.ui, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Log in with Spotify</button>
             </div>
           ) : null}
@@ -185,7 +183,7 @@ function MobileSpine({ pathname, sections }) {
 
   return (
     <>
-      <header style={{ position: "fixed", top: 0, left: 0, right: 0, height: 52, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: `1.5px solid ${C.ink}`, background: "rgba(241,236,224,0.95)", backdropFilter: "blur(12px)" }}>
+      <header style={{ position: "fixed", top: 0, left: 0, right: 0, height: 52, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: `1px solid ${C.border2}`, background: "rgba(11,12,15,0.92)", backdropFilter: "blur(12px)" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
           <Wordmark size={19} />
           {current && <span style={{ ...TYPE.micro, color: C.muted }}>{current.label}</span>}
@@ -194,7 +192,7 @@ function MobileSpine({ pathname, sections }) {
       </header>
 
       {open && (
-        <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(241,236,224,0.98)", backdropFilter: "blur(8px)", padding: "26px 24px", overflowY: "auto" }}>
+        <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(11,12,15,0.98)", backdropFilter: "blur(8px)", padding: "26px 24px", overflowY: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <Wordmark />
             <button onClick={() => setOpen(false)} aria-label="Close contents" style={{ background: "none", border: "none", color: C.ink, fontSize: 30, cursor: "pointer", lineHeight: 1 }}>×</button>
@@ -205,7 +203,7 @@ function MobileSpine({ pathname, sections }) {
               const active = isActive(pathname, s.to);
               const sc = SECTION[i + 1];
               return (
-                <Link key={s.to} to={s.to} onClick={() => setOpen(false)} style={{ textDecoration: "none", padding: "18px 0", borderTop: `1.5px solid ${C.ink}`, display: "flex", alignItems: "baseline", gap: 14 }}>
+                <Link key={s.to} to={s.to} onClick={() => setOpen(false)} style={{ textDecoration: "none", padding: "18px 0", borderTop: `1px solid ${C.border2}`, display: "flex", alignItems: "baseline", gap: 14 }}>
                   <span style={{ fontFamily: FONT.mono, fontSize: 14, fontWeight: 700, color: sc.color, fontVariantNumeric: "tabular-nums" }}>{s.n}</span>
                   <span>
                     <span style={{ fontFamily: FONT.tab, fontWeight: 400, fontSize: 28, letterSpacing: "0.02em", color: active ? sc.color : C.ink, display: "block" }}>{s.label}</span>
@@ -216,14 +214,12 @@ function MobileSpine({ pathname, sections }) {
             })}
           </nav>
           {auth?.user ? (
-            <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1.5px solid ${C.ink}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${C.border2}` }}>
               <span style={{ ...TYPE.micro, color: C.muted }}>{auth.user.display_name}</span>
-              <button onClick={() => { setOpen(false); auth.logout(); }}
-                style={{ background: "none", border: `1.5px solid ${C.ink}`, borderRadius: 4, color: C.ink, cursor: "pointer", fontSize: 12, fontFamily: FONT.mono, fontWeight: 700, letterSpacing: "0.06em", padding: "8px 14px", textTransform: "uppercase" }}>Log out</button>
             </div>
           ) : auth?.isGuest ? (
-            <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1.5px solid ${C.ink}` }}>
-              <button onClick={() => { setOpen(false); auth.login(); }}
+            <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${C.border2}` }}>
+              <button onClick={() => { setOpen(false); auth.beginSignIn(); }}
                 style={{ width: "100%", background: "#1DB954", border: "none", borderRadius: 6, color: "#0B0C0F", cursor: "pointer", fontSize: 13, fontFamily: FONT.ui, fontWeight: 800, padding: "12px 14px" }}>Log in with Spotify</button>
             </div>
           ) : null}
