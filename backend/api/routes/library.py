@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Query, BackgroundTasks, Body
+from fastapi import APIRouter, Query, BackgroundTasks, Body, Depends
+from api.deps import get_current_user
 import psycopg2
 import requests
 import os
@@ -184,7 +185,7 @@ def album_cover(album: str, artist: str = ""):
 
 
 @router.get("/search-albums")
-def search_albums(q: str, user_id: str = Query(DEFAULT_USER), limit: int = Query(6, le=15)):
+def search_albums(q: str, user_id: str = Depends(get_current_user), limit: int = Query(6, le=15)):
     """Owned-album typeahead for the discovery studio's album seeds."""
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""SELECT album, artist, COUNT(*) FROM tracks
@@ -212,7 +213,7 @@ def _run_enrich_backfill(user_id, ids):
 
 
 @router.get("/enrich-status")
-def enrich_status(user_id: str = Query(DEFAULT_USER)):
+def enrich_status(user_id: str = Depends(get_current_user)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE reccobeats_id IS NOT NULL)
                    FROM tracks WHERE user_id = %s""", (user_id,))
@@ -223,7 +224,7 @@ def enrich_status(user_id: str = Query(DEFAULT_USER)):
 
 @router.post("/enrich-backfill")
 def enrich_backfill(background_tasks: BackgroundTasks,
-                    user_id: str = Query(DEFAULT_USER),
+                    user_id: str = Depends(get_current_user),
                     limit: int = Query(600, le=3000)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""SELECT id FROM tracks WHERE user_id = %s AND reccobeats_id IS NULL
@@ -239,7 +240,7 @@ def enrich_backfill(background_tasks: BackgroundTasks,
 
 
 @router.post("/unsave")
-def unsave_tracks(payload: dict = Body(...), user_id: str = Query(DEFAULT_USER)):
+def unsave_tracks(payload: dict = Body(...), user_id: str = Depends(get_current_user)):
     """Swipe-to-remove: un-save tracks from the Spotify library + drop them locally
     so dead-saves/duplicates stay in sync. Needs the user-library-modify scope on the
     cached token (re-authorize once if Spotify rejects it)."""
@@ -378,7 +379,7 @@ def create_or_sync_month(sp, user_id, year, month, force=False):
 
 
 @router.get("/monthly-playlists")
-def list_monthly_playlists(user_id: str = Query(DEFAULT_USER)):
+def list_monthly_playlists(user_id: str = Depends(get_current_user)):
     ensure_monthly_table()
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
@@ -397,7 +398,7 @@ def list_monthly_playlists(user_id: str = Query(DEFAULT_USER)):
 
 
 @router.post("/monthly-playlists/sync-current")
-def sync_current_month(user_id: str = Query(DEFAULT_USER)):
+def sync_current_month(user_id: str = Depends(get_current_user)):
     """Create or refresh the playlist for the current calendar month."""
     now = datetime.now()
     sp  = get_spotify()
@@ -415,7 +416,7 @@ def _run_saved_sync():
 
 
 @router.post("/sync-saved")
-def sync_saved(background_tasks: BackgroundTasks, user_id: str = Query(DEFAULT_USER)):
+def sync_saved(background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
     """
     Manually pull newly-saved Spotify tracks into the library (incremental) — the
     same sync the cron (run_poller.py) runs every 30 min. Verifies the Spotify
@@ -443,7 +444,7 @@ def sync_saved(background_tasks: BackgroundTasks, user_id: str = Query(DEFAULT_U
 
 
 @router.get("/monthly-rewind")
-def monthly_rewind(user_id: str = Query(DEFAULT_USER)):
+def monthly_rewind(user_id: str = Depends(get_current_user)):
     """
     Browse every month you've saved music — computed from the local DB,
     NO Spotify writes. Shows which months you've already pushed to Spotify.
@@ -495,7 +496,7 @@ def monthly_rewind(user_id: str = Query(DEFAULT_USER)):
 
 @router.get("/month-tracks")
 def month_tracks(year: int = Query(...), month: int = Query(...),
-                 user_id: str = Query(DEFAULT_USER)):
+                 user_id: str = Depends(get_current_user)):
     """Full track list for one month (for the expand/preview view)."""
     last_day  = calendar.monthrange(year, month)[1]
     month_str = f"{year}-{str(month).zfill(2)}"
@@ -522,7 +523,7 @@ def month_tracks(year: int = Query(...), month: int = Query(...),
 
 @router.post("/monthly-playlists/create")
 def create_month_playlist(year: int = Query(...), month: int = Query(...),
-                          user_id: str = Query(DEFAULT_USER)):
+                          user_id: str = Depends(get_current_user)):
     """Explicitly push ONE month's saves to Spotify (only when the user clicks)."""
     sp  = get_spotify()
     res = create_or_sync_month(sp, user_id, year, month, force=True)
@@ -562,7 +563,7 @@ def _months_where(months_list):
 
 @router.get("/range-tracks")
 def range_tracks(months: str = Query(..., description="comma list e.g. 2025-12,2026-01"),
-                 user_id: str = Query(DEFAULT_USER)):
+                 user_id: str = Depends(get_current_user)):
     """All tracks saved across a set of months, deduped, oldest first."""
     ms = _parse_months(months)
     if not ms:
@@ -593,7 +594,7 @@ def range_tracks(months: str = Query(..., description="comma list e.g. 2025-12,2
 
 @router.post("/multi-month-playlist")
 def multi_month_playlist(months: str = Query(...), name: str = Query(""),
-                         user_id: str = Query(DEFAULT_USER)):
+                         user_id: str = Depends(get_current_user)):
     """Create ONE Spotify playlist from all songs saved across the chosen months."""
     ms = _parse_months(months)
     if not ms:
@@ -642,7 +643,7 @@ def multi_month_playlist(months: str = Query(...), name: str = Query(""),
         return {"success": False, "message": msg}
 
 @router.get("/duplicates")
-def find_duplicates(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def find_duplicates(user_id: str = Depends(get_current_user)):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("""
@@ -668,7 +669,7 @@ def find_duplicates(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 @router.get("/dead-saves")
 def find_dead_saves(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     min_days: int = Query(365),
     limit: int = Query(2000, le=5000),
 ):
@@ -725,7 +726,7 @@ def find_dead_saves(
 
 @router.get("/top-saved-artists")
 def top_saved_artists(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     limit: int = Query(20, le=100)
 ):
     conn = get_conn()
@@ -749,7 +750,7 @@ def top_saved_artists(
     ]}
 
 @router.get("/moods")
-def list_moods(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def list_moods(user_id: str = Depends(get_current_user)):
     """The niche moods + how many of your analyzed tracks match each (one scan)."""
     conn = get_conn(); cur = conn.cursor()
     select = ", ".join(f"COUNT(*) FILTER (WHERE {sql})" for _k, _l, sql in MOODS)
@@ -764,7 +765,7 @@ def list_moods(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 @router.get("/liked-songs")
 def liked_songs(
-    user_id: str        = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str        = Depends(get_current_user),
     sort_by: str        = Query("saved_at"),
     order: str          = Query("desc"),
     min_year: int       = Query(None),
@@ -878,7 +879,7 @@ def liked_songs(
 def create_time_capsule(
     year:    int = Query(...),
     month:   int = Query(...),
-    user_id: str = Query(DEFAULT_USER)
+    user_id: str = Depends(get_current_user)
 ):
     # Unified with the monthly-playlist engine — idempotent, won't duplicate.
     sp = get_spotify()

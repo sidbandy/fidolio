@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from typing import Optional, List
+from api.deps import get_current_user
 import psycopg2
 import requests
 import os
@@ -312,7 +313,7 @@ def format_rb_tracks(rb_tracks, library_ids, size, language_filter="en"):
 
 @router.get("/for-me")
 def get_recommendations(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     vibe: Optional[str] = Query(None, description="Plain English vibe description"),
     seed_song: Optional[str] = Query(None, description="Song name to base recommendations on"),
     artists: Optional[str] = Query(None, description="Comma-separated artist names to prioritize"),
@@ -427,7 +428,7 @@ def get_recommendations(
 @router.get("/similar-to")
 def similar_to(
     track_name: str = Query(...),
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     size: int = Query(15)
 ):
     conn = get_conn()
@@ -674,7 +675,7 @@ _REC_TTL = 1800
 
 @router.get("/recommend")
 def recommend(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     seed: Optional[List[str]] = Query(None, description="up to 2: 'song|Name|Artist' or 'album|Name|Artist'"),
     vibe: Optional[str] = Query(None),
     artists: Optional[str] = Query(None),
@@ -766,7 +767,7 @@ def recommend(
 
 
 @router.get("/rabbit-hole-tracks")
-def rabbit_hole_tracks(artist: str, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def rabbit_hole_tracks(artist: str, user_id: str = Depends(get_current_user)):
     """Your OWN tracks by a binged artist, ranked by plays then taste-fit — the ones
     to actually play next. Per-artist distinct (replaces the generic, repetitive
     Last.fm top-tracks that gave every card the same songs)."""
@@ -829,7 +830,7 @@ def _relation(a, b):
     return None
 
 @router.get("/mixes-with")
-def mixes_with(track: str, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"), size: int = Query(8, le=20)):
+def mixes_with(track: str, user_id: str = Depends(get_current_user), size: int = Query(8, le=20)):
     """Owned tracks that transition smoothly from `track` — harmonic (Camelot) key
     compatibility + close BPM. For album/flow listeners."""
     conn = get_conn(); cur = conn.cursor()
@@ -903,7 +904,7 @@ def _same_artist_pick(cur, user_id, artist, tv, stats, exclude):
 @router.get("/play-next")
 def play_next(
     track: str = Query(...),
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     size: int = Query(8, le=15),
     artist: Optional[str] = Query(None),
     spotify_id: Optional[str] = Query(None),

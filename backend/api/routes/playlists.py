@@ -18,7 +18,8 @@ Condition fields
   saved_days    lte               integer (saved within N days)
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
+from api.deps import get_current_user
 from pydantic import BaseModel
 from typing import Optional
 import psycopg2, json, os, requests
@@ -365,7 +366,8 @@ class CurateBody(BaseModel):
 
 
 @router.post("/curate")
-def curate(body: CurateBody):
+def curate(body: CurateBody, current_user: str = Depends(get_current_user)):
+    body.user_id = current_user
     """Swipe-to-build candidates: rule-matched tracks ranked by cohesion (closeness to
     the matched set's centroid), returning ~1.25x the target so the user can swipe to
     include/exclude and still land on their number with the best-fitting songs first."""
@@ -391,7 +393,8 @@ def curate(body: CurateBody):
 
 
 @router.post("/from-tracks")
-def create_from_tracks(body: FromTracksBody):
+def create_from_tracks(body: FromTracksBody, current_user: str = Depends(get_current_user)):
+    body.user_id = current_user
     """Create a one-off Spotify playlist from an explicit list of track IDs.
     Used by Search → 'Save as Playlist'. Not rule-managed (no rotation/sync)."""
     ids = [t for t in body.track_ids if t]
@@ -521,7 +524,7 @@ SKIP_TAGS = {"seen live", "albums i own", "favorites", "love", "awesome",
 
 @router.post("/enrich-language")
 def enrich_language(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     limit:   int = Query(2000, description="Max artists to check. Default covers full library."),
 ):
     """
@@ -574,7 +577,7 @@ def enrich_language(
 
 
 @router.get("/languages")
-def library_languages(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def library_languages(user_id: str = Depends(get_current_user)):
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("""
@@ -592,7 +595,8 @@ def library_languages(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 # ─── Preview ──────────────────────────────────────────────────────────────────
 
 @router.post("/preview")
-def preview(body: PreviewBody):
+def preview(body: PreviewBody, current_user: str = Depends(get_current_user)):
+    body.user_id = current_user
     conn = get_conn(); cur = conn.cursor()
     query, params = build_query(
         body.conditions, body.excludes,
@@ -615,7 +619,7 @@ def preview(body: PreviewBody):
 # ─── List / create / update / delete ────────────────────────────────────────
 
 @router.get("/")
-def list_playlists(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def list_playlists(user_id: str = Depends(get_current_user)):
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("""
@@ -644,7 +648,8 @@ def list_playlists(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 
 @router.post("/")
-def create_playlist(body: SaveBody):
+def create_playlist(body: SaveBody, current_user: str = Depends(get_current_user)):
+    body.user_id = current_user
     mode = (body.spotify_mode or "new").lower()
     playlist_id = normalize_playlist_id(body.playlist_id)
     playlist_url = None
@@ -736,7 +741,8 @@ def create_playlist(body: SaveBody):
 
 
 @router.put("/{smart_id}")
-def update_playlist(smart_id: int, body: SaveBody):
+def update_playlist(smart_id: int, body: SaveBody, current_user: str = Depends(get_current_user)):
+    body.user_id = current_user
     mode = (body.spotify_mode or "keep").lower()
     incoming_pid = normalize_playlist_id(body.playlist_id)
     rule = {
@@ -834,7 +840,7 @@ def update_playlist(smart_id: int, body: SaveBody):
 
 
 @router.delete("/{smart_id}")
-def delete_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def delete_playlist(smart_id: int, user_id: str = Depends(get_current_user)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("DELETE FROM smart_playlists WHERE id=%s AND user_id=%s", (smart_id, user_id))
     conn.commit(); cur.close(); conn.close()
@@ -844,7 +850,7 @@ def delete_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518
 # ─── Sync ─────────────────────────────────────────────────────────────────────
 
 @router.post("/{smart_id}/sync")
-def sync_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def sync_playlist(smart_id: int, user_id: str = Depends(get_current_user)):
     """Re-run the rule and replace the linked Spotify playlist entirely."""
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
@@ -886,7 +892,8 @@ def sync_playlist(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9
 # ─── Rotate ───────────────────────────────────────────────────────────────────
 
 @router.post("/{smart_id}/rotate")
-def rotate_playlist(smart_id: int, body: RotateBody):
+def rotate_playlist(smart_id: int, body: RotateBody, current_user: str = Depends(get_current_user)):
+    body.user_id = current_user
     """
     Swap the lowest-scoring tracks for fresh ones that still fit the playlist's vibe.
 
@@ -1056,7 +1063,7 @@ def rotate_playlist(smart_id: int, body: RotateBody):
 # ─── Auto-rotation scheduler endpoints ───────────────────────────────────────
 
 @router.get("/rotation-due")
-def rotation_due(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def rotation_due(user_id: str = Depends(get_current_user)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
         SELECT id, name, spotify_playlist_id, rotation_size,
@@ -1095,7 +1102,7 @@ def rotation_due(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 
 @router.post("/run-auto-rotations")
-def run_auto_rotations(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def run_auto_rotations(user_id: str = Depends(get_current_user)):
     due_resp = rotation_due(user_id=user_id)
     due_list = due_resp.get("due", [])
     if not due_list:
@@ -1123,7 +1130,7 @@ def run_auto_rotations(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 
 @router.get("/{smart_id}/rotation-status")
-def rotation_status(smart_id: int, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def rotation_status(smart_id: int, user_id: str = Depends(get_current_user)):
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
         SELECT rotation_enabled, rotation_size, rotation_source,

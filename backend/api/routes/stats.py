@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
+from api.deps import get_current_user
 from typing import Literal
 import psycopg2
 import os
@@ -53,7 +54,7 @@ def refresh_listening():
 @router.get("/wrapped")
 def get_wrapped(
     period: Literal["day", "week", "month", "year"] = "month",
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")
+    user_id: str = Depends(get_current_user)
 ):
     conn = get_conn()
     cur  = conn.cursor()
@@ -100,7 +101,7 @@ def get_wrapped(
     }
 
 @router.get("/all-time")
-def all_time_stats(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def all_time_stats(user_id: str = Depends(get_current_user)):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM listening_history")
@@ -125,7 +126,7 @@ def all_time_stats(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
     }
 
 @router.get("/sonic-identity")
-def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def sonic_identity(user_id: str = Depends(get_current_user)):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("""
@@ -229,7 +230,7 @@ def sonic_identity(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 
 @router.get("/top-albums")
 def top_albums(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     limit: int = Query(20)
 ):
     conn = get_conn()
@@ -299,7 +300,7 @@ def _listen_sessions(cur, user_id):
 
 @router.get("/top-albums-rich")
 def top_albums_rich(
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
     limit: int = Query(50, le=60),
 ):
     cached = _TOP_ALBUMS_CACHE.get(user_id)
@@ -344,7 +345,7 @@ def top_albums_rich(
 
 
 @router.get("/taste-timeline")
-def taste_timeline(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def taste_timeline(user_id: str = Depends(get_current_user)):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("""
@@ -374,7 +375,7 @@ def taste_timeline(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
     ]}
 
 @router.get("/taste-timeline-insights")
-def taste_timeline_insights(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def taste_timeline_insights(user_id: str = Depends(get_current_user)):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("""

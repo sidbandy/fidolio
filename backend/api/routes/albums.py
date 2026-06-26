@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 import psycopg2, requests, os, time, re
+from api.deps import get_current_user
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
@@ -17,7 +18,7 @@ def get_conn():
 def explore_album(
     album_name:  str = Query(...),
     artist_name: str = Query(...),
-    user_id:     str = Query("0tz6fep2m5bx1vq85g48518u9")
+    user_id:     str = Depends(get_current_user)
 ):
     conn = get_conn()
     cur  = conn.cursor()
@@ -222,7 +223,7 @@ _BS_TTL = 3600
 
 
 @router.get("/blind-spots")
-def get_blind_spots(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def get_blind_spots(user_id: str = Depends(get_current_user)):
     """All blind-spot genres (cheap fields) + 3 example songs each. Cached 1h since
     the Last.fm tag aggregation is slow. Meaning + artist recs are lazy, per-card,
     from /blind-spot-detail."""
@@ -305,7 +306,7 @@ def get_blind_spots(user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
 def blind_spot_detail(
     genre: str,
     artists: str = "",
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
 ):
     """One-sentence meaning of a genre + niche artists (similar to YOUR artists in
     that genre) you don't already own — accurate next-step recommendations."""
@@ -386,7 +387,7 @@ def blind_spot_detail(
 
 
 @router.get("/artist-top-tracks")
-def artist_top_tracks(artist: str, user_id: str = Query("0tz6fep2m5bx1vq85g48518u9")):
+def artist_top_tracks(artist: str, user_id: str = Depends(get_current_user)):
     """An artist's best tracks (Last.fm) + whether you already own each — powers the
     rabbit-hole 'listen next' flip."""
     names = []

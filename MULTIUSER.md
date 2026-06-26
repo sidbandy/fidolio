@@ -47,7 +47,11 @@ Goal: any allow-listed friend logs in with Spotify, sees **their own** data, app
 ## Status
 - [x] Phase 0 — branch + this doc
 - [x] Phase 1 — auth foundation (users table + DBCacheHandler + session cookie + /auth routes). Verified.
-- [ ] Phase 2 — endpoint scoping
+- [x] Phase 2 — endpoint scoping. `api/deps.get_current_user` (cookie→user, else DEFAULT_USER_ID).
+      Converted ~46 sites across stats/library/search/discovery/albums/playlists (Query→Depends +
+      Pydantic-body override `body.user_id = current_user`). collab uses explicit params (untouched).
+      nowplaying `/current` deferred to Phase 3 (needs per-user Spotify client). Verified non-breaking.
+- [ ] Phase 2b — nowplaying `/current` per-user (folded into Phase 3)
 - [ ] Phase 3 — per-user sync
 - [ ] Phase 4 — frontend gate
 - [ ] Phase 5 — deploy + allowlist

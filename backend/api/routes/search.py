@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
+from api.deps import get_current_user
 from typing import Optional
 import psycopg2, requests, re, os
 from dotenv import load_dotenv
@@ -287,7 +288,7 @@ def fmt(rows):
 def nlp_search(
     q:       str = Query(...),
     limit:   int = Query(20, le=100),
-    user_id: str = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str = Depends(get_current_user),
 ):
     # Load all artists for fuzzy matching
     conn = get_conn()
@@ -349,7 +350,7 @@ def search_library(
     language:         Optional[str]   = Query(None),
     limit:            int             = Query(20, le=100),
     offset:           int             = Query(0),
-    user_id:          str             = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id:          str             = Depends(get_current_user),
 ):
     conn = get_conn()
     cur  = conn.cursor()
@@ -448,7 +449,7 @@ def weather_profile(lat, lon):
 def get_weather_vibe(
     lat:     float = Query(...),
     lon:     float = Query(...),
-    user_id: str   = Query("0tz6fep2m5bx1vq85g48518u9"),
+    user_id: str   = Depends(get_current_user),
     limit:   int   = Query(20),
 ):
     wp = weather_profile(lat, lon)
