@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import stats, library, search, discovery, nowplaying, albums, collab, playlists
+from api.routes import stats, library, search, discovery, nowplaying, albums, collab, playlists, auth
 
 # In the cloud, write the Spotify token from SPOTIFY_TOKEN_CACHE env to disk once.
 try:
@@ -26,6 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router,        prefix="/auth",        tags=["auth"])
 app.include_router(stats.router,       prefix="/stats",       tags=["stats"])
 app.include_router(library.router,     prefix="/library",     tags=["library"])
 app.include_router(search.router,      prefix="/search",      tags=["search"])

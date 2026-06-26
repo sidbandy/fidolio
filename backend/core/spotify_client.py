@@ -63,14 +63,24 @@ def bootstrap_cache():
         print(f"[spotify] could not write token cache: {e}")
 
 
-def get_spotify_client():
-    bootstrap_cache()
-    auth_manager = SpotifyOAuth(
+def _oauth_common():
+    return dict(
         client_id=os.getenv("SPOTIFY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
         redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI"),
         scope=SCOPE,
         open_browser=False,
-        cache_path=resolve_cache_path(),
     )
+
+
+def get_spotify_client(user_id=None):
+    """Spotify client for a given user — token comes from the DB and spotipy auto-refreshes it.
+    With user_id=None, falls back to the legacy single-account file cache (the existing token),
+    so callers that haven't been migrated yet keep working."""
+    if user_id:
+        from core.users import DBCacheHandler
+        auth_manager = SpotifyOAuth(cache_handler=DBCacheHandler(user_id), **_oauth_common())
+    else:
+        bootstrap_cache()
+        auth_manager = SpotifyOAuth(cache_path=resolve_cache_path(), **_oauth_common())
     return spotipy.Spotify(auth_manager=auth_manager)
