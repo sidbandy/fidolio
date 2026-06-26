@@ -4,6 +4,7 @@ import importlib
 
 # (module path, dict attribute) — each is a {user_id: (timestamp, payload)} cache.
 _USER_CACHES = [
+    ("api.routes.stats",  "_SONIC_CACHE"),        # Identity "analyzing your sound" (heaviest)
     ("api.routes.stats",  "_TOP_ALBUMS_CACHE"),   # Top Albums board
     ("api.routes.albums", "_BS_CACHE"),           # Discover blind spots
     ("core.similarity",   "_STATS_CACHE"),        # taste centroid used by recs/play-next

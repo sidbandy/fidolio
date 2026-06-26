@@ -126,8 +126,14 @@ def all_time_stats(user_id: str = Depends(get_current_user)):
         "last_play": str(last_play)[:16] if last_play else None
     }
 
+_SONIC_CACHE = {}     # user_id -> (timestamp, payload)
+_SONIC_TTL = 1800     # 30 min; invalidated immediately when the user's library changes
+
 @router.get("/sonic-identity")
 def sonic_identity(user_id: str = Depends(get_current_user)):
+    hit = _SONIC_CACHE.get(user_id)
+    if hit and (time.time() - hit[0] < _SONIC_TTL):
+        return hit[1]
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("""
@@ -207,7 +213,7 @@ def sonic_identity(user_id: str = Depends(get_current_user)):
 
     cur.close()
     conn.close()
-    return {
+    payload = {
         "averages": {
             "tempo": float(avg[0]) if avg[0] else None,
             "energy": float(avg[1]) if avg[1] else None,
@@ -228,6 +234,8 @@ def sonic_identity(user_id: str = Depends(get_current_user)):
         "decade_distribution": decade_distribution,
         "rabbit_holes": rabbit_holes
     }
+    _SONIC_CACHE[user_id] = (time.time(), payload)
+    return payload
 
 @router.get("/top-albums")
 def top_albums(

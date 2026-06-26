@@ -67,3 +67,19 @@ def _start_poller():
     if os.getenv("ENABLE_POLLER", "1") != "0":
         threading.Thread(target=_poll_loop, daemon=True, name="fidolio-poller").start()
         print(f"[scheduler] in-app poller started (every {POLL_INTERVAL}s)")
+
+
+@app.on_event("startup")
+def _warm_demo_cache():
+    """Pre-compute the demo (default) user's heaviest stats on boot so the FIRST visitor to the
+    public demo doesn't sit on 'analyzing your sound'. Runs in the background; failures are harmless."""
+    def _warm():
+        _time.sleep(8)  # let the app + DB settle first
+        try:
+            from api.deps import DEFAULT_USER_ID
+            from api.routes.stats import sonic_identity
+            sonic_identity(user_id=DEFAULT_USER_ID)
+            print("[warm] demo sonic-identity cached")
+        except Exception as e:
+            print(f"[warm] demo cache warm skipped: {e}")
+    threading.Thread(target=_warm, daemon=True, name="fidolio-warm").start()

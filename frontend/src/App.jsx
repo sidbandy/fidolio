@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { C, FONT, TYPE, discoText } from "./theme";
+import { C, FONT, discoText } from "./theme";
 import useMediaQuery from "./hooks/useMediaQuery";
 import Spine, { SIDEBAR, MOBILE_Q } from "./components/Spine";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { PreviewProvider } from "./context/PreviewProvider";
 import { AuthProvider, useAuth } from "./context/AuthProvider";
+import Login from "./components/Login";
 import SyncGate from "./components/SyncGate";
 
 // The five magazine sections
@@ -99,11 +100,16 @@ function Splash() {
 // Auth gate: guests explore the owner's demo (the app, with a banner); a brand-new logged-in user
 // with no tracks yet sees SyncGate; everyone else gets the full app with their own data.
 function Gate() {
-  const { status, user } = useAuth();
+  const { status, user, demoOwner } = useAuth();
+  const [enteredDemo, setEnteredDemo] = useState(() => sessionStorage.getItem("fidolio_demo") === "1");
   if (status === "loading") return <Splash />;
   if (status === "authed") {
     const hasData = user?.sync_status === "ready" || (user?.saved_count || 0) > 0;
-    if (!hasData) return <SyncGate />;
+    return hasData ? <Shell /> : <SyncGate />;
+  }
+  // guest: landing page first, then the live demo (sidebar handles login)
+  if (!enteredDemo) {
+    return <Login owner={demoOwner} onDemo={() => { sessionStorage.setItem("fidolio_demo", "1"); setEnteredDemo(true); }} />;
   }
   return <Shell />;
 }
