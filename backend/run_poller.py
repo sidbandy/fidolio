@@ -18,8 +18,26 @@ load_dotenv()
 DB_URL = os.getenv("DATABASE_URL")
 
 
+def _library_sync_due(uid, max_age_hours=23):
+    """Library sync (full add/remove reconciliation) is heavier than recording plays, so we run it
+    at most once a day per user. Plays still record on every poll."""
+    try:
+        from core.users import get_user
+        u = get_user(uid)
+        last = u and u.get("last_sync")
+        if not last:
+            return True
+        from datetime import timezone
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        from datetime import datetime as _dt
+        return (_dt.now(timezone.utc) - last).total_seconds() > max_age_hours * 3600
+    except Exception:
+        return True
+
+
 def _poll_user(user_id):
-    """Record one user's recent plays + keep their saved library current."""
+    """Record one user's recent plays (every run) + sync their saved library (≤ once a day)."""
     sp = get_spotify_client(user_id)            # DB token per user; file cache for the default account
     uid = user_id or sp.current_user()["id"]
     conn = psycopg2.connect(DB_URL); cur = conn.cursor()
@@ -44,10 +62,11 @@ def _poll_user(user_id):
     conn.commit(); cur.close(); conn.close()
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {uid}: {new_plays} new plays ({len(items)} fetched)")
 
-    # Keep the saved-tracks library current (incremental — cheap when nothing new)
+    # Library sync (adds + removals) — heavier, so at most once a day per user.
     try:
-        from sync_library import sync_saved_tracks
-        sync_saved_tracks(user_id=user_id)
+        if _library_sync_due(uid):
+            from sync_library import sync_saved_tracks
+            sync_saved_tracks(user_id=user_id)
     except Exception as e:
         print(f"  library sync skipped for {uid}: {e}")
 

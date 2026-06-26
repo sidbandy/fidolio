@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { C } from "./theme";
+import { C, FONT, discoText } from "./theme";
 import useMediaQuery from "./hooks/useMediaQuery";
 import Spine, { SIDEBAR, MOBILE_Q } from "./components/Spine";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { PreviewProvider } from "./context/PreviewProvider";
+import { AuthProvider, useAuth } from "./context/AuthProvider";
+import Login from "./components/Login";
+import SyncGate from "./components/SyncGate";
 
 // The five magazine sections
 import Identity from "./pages/Identity";
@@ -66,12 +69,35 @@ function Shell() {
   );
 }
 
+function Splash() {
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="disco-shimmer" style={{ fontFamily: FONT.logo, fontStyle: "italic", fontSize: 48, letterSpacing: "-0.05em", ...discoText }}>FIDOLIO</div>
+    </div>
+  );
+}
+
+// Auth gate: anon → Login; brand-new user with no tracks yet → SyncGate; otherwise the app.
+function Gate() {
+  const { status, user } = useAuth();
+  if (status === "loading") return <Splash />;
+  if (status === "anon") {
+    const err = new URLSearchParams(window.location.search).get("auth_error");
+    return <Login error={err} />;
+  }
+  const hasData = user?.sync_status === "ready" || (user?.saved_count || 0) > 0;
+  if (!hasData) return <SyncGate />;
+  return <Shell />;
+}
+
 export default function App() {
   return (
-    <PreviewProvider>
-      <BrowserRouter>
-        <Shell />
-      </BrowserRouter>
-    </PreviewProvider>
+    <AuthProvider>
+      <PreviewProvider>
+        <BrowserRouter>
+          <Gate />
+        </BrowserRouter>
+      </PreviewProvider>
+    </AuthProvider>
   );
 }

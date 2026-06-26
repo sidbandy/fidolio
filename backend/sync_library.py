@@ -105,6 +105,35 @@ def _copy_existing_features(cur, conn, user_id, ids):
     return [i for i in ids if i not in copied]
 
 
+def _reconcile_removals(sp, cur, conn, user_id):
+    """Delete locally-stored tracks the user has un-saved on Spotify (directly or via Health).
+    Cheap: only pages the full library when the local count exceeds Spotify's saved total — i.e.
+    something was actually removed — otherwise it's a single 'total' lookup."""
+    cur.execute("SELECT COUNT(*) FROM tracks WHERE user_id=%s", (user_id,))
+    db_count = cur.fetchone()[0]
+    try:
+        total = sp.current_user_saved_tracks(limit=1).get("total", db_count)
+    except Exception:
+        return 0
+    if db_count <= total:
+        return 0
+    saved_ids, offset = set(), 0
+    while offset < total + 50:
+        items = sp.current_user_saved_tracks(limit=50, offset=offset).get("items", [])
+        if not items:
+            break
+        saved_ids |= {it["track"]["id"] for it in items if it.get("track") and it["track"].get("id")}
+        offset += 50
+        time.sleep(0.05)
+    cur.execute("SELECT id FROM tracks WHERE user_id=%s", (user_id,))
+    gone = [r[0] for r in cur.fetchall() if r[0] not in saved_ids]
+    if gone:
+        cur.execute("DELETE FROM listening_history WHERE user_id=%s AND track_id = ANY(%s)", (user_id, gone))
+        cur.execute("DELETE FROM tracks WHERE user_id=%s AND id = ANY(%s)", (user_id, gone))
+        conn.commit()
+    return len(gone)
+
+
 def sync_saved_tracks(user_id=None, verbose=True, progress=None):
     sp = get_spotify_client(user_id)
     if not user_id:
@@ -161,12 +190,22 @@ def sync_saved_tracks(user_id=None, verbose=True, progress=None):
         if need_enrich:
             _enrich(cur, conn, need_enrich)
 
+    # remove tracks un-saved on Spotify since last sync (keeps the library + boards accurate)
+    removed = _reconcile_removals(sp, cur, conn, user_id)
+    total -= removed
+
     cur.close(); conn.close()
+    if new_ids or removed:
+        try:
+            from core.invalidate import invalidate_user
+            invalidate_user(user_id)        # refresh Top Albums / blind spots / taste centroid
+        except Exception:
+            pass
     if progress:
         progress("ready", saved=total, last_sync=True)
     if verbose:
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] library sync ({user_id}): "
-              f"{len(new_ids)} new tracks added"
+              f"{len(new_ids)} added, {removed} removed"
               + (" + enriched" if new_ids else ""))
     return len(new_ids)
 

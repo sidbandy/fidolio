@@ -41,12 +41,14 @@ def root():
     return {"status": "Fidolio is running"}
 
 
-# ── Hourly in-app poller ──────────────────────────────────────────────────────
-# Keeps listening history + the saved library current in the cloud, so nothing
-# needs to run on a laptop. The Procfile runs a single uvicorn worker, so there's
-# exactly one scheduler. Set ENABLE_POLLER=0 to turn it off (e.g. local dev).
+# ── In-app poller (hourly) ────────────────────────────────────────────────────
+# Records each user's recent plays every run (hourly) and reconciles their saved library
+# at most once a day (inside run_poller). The Procfile runs a single uvicorn worker, so there's
+# exactly one scheduler. Set ENABLE_POLLER=0 to turn it off (local dev).
 import threading
 import time as _time
+
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "3600"))  # hourly (library sync is daily, inside run_poller)
 
 
 def _poll_loop():
@@ -54,14 +56,14 @@ def _poll_loop():
     while True:
         try:
             import run_poller
-            run_poller.main()  # recent plays + incremental saved-tracks sync
+            run_poller.main()  # recent plays (every run) + saved-tracks sync (daily, per user)
         except Exception as e:
-            print(f"[scheduler] hourly poll failed: {e}")
-        _time.sleep(3600)  # every hour
+            print(f"[scheduler] poll failed: {e}")
+        _time.sleep(POLL_INTERVAL)
 
 
 @app.on_event("startup")
 def _start_poller():
     if os.getenv("ENABLE_POLLER", "1") != "0":
         threading.Thread(target=_poll_loop, daemon=True, name="fidolio-poller").start()
-        print("[scheduler] in-app hourly poller started")
+        print(f"[scheduler] in-app poller started (every {POLL_INTERVAL}s)")

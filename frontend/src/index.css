@@ -262,3 +262,7 @@ button:active { transform: scale(0.95); }
   .lift:hover { transform: none; }
   button:active { transform: none; }
 }
+
+/* Indeterminate loading strip — SyncGate "building your library" */
+@keyframes loadingStrip { 0% { margin-left: -45%; } 100% { margin-left: 105%; } }
+.loading-strip { animation: loadingStrip 1.25s ease-in-out infinite; }

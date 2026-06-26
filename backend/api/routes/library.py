@@ -249,7 +249,7 @@ def unsave_tracks(payload: dict = Body(...), user_id: str = Depends(get_current_
         return {"success": False, "removed": 0, "error": "no track ids"}
     try:
         from core.spotify_client import get_spotify_client
-        sp = get_spotify_client()
+        sp = get_spotify_client(user_id)        # remove from THIS user's Spotify library
         for i in range(0, len(ids), 50):
             sp.current_user_saved_tracks_delete(tracks=ids[i:i + 50])
     except Exception as e:
@@ -258,10 +258,12 @@ def unsave_tracks(payload: dict = Body(...), user_id: str = Depends(get_current_
     db_removed = 0
     try:
         conn = get_conn(); cur = conn.cursor()
-        cur.execute("DELETE FROM listening_history WHERE track_id = ANY(%s)", (ids,))
+        cur.execute("DELETE FROM listening_history WHERE user_id = %s AND track_id = ANY(%s)", (user_id, ids))
         cur.execute("DELETE FROM tracks WHERE id = ANY(%s) AND user_id = %s", (ids, user_id))
         db_removed = cur.rowcount
         conn.commit(); cur.close(); conn.close()
+        from core.invalidate import invalidate_user
+        invalidate_user(user_id)                # so the boards/stats reflect the removal
     except Exception as e:
         print(f"[unsave] local cleanup skipped: {e}")
     return {"success": True, "removed": len(ids), "db_removed": db_removed}

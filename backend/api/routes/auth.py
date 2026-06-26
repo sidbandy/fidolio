@@ -51,7 +51,9 @@ def callback(code: str = None, error: str = None):
     is_new = get_user(uid) is None
     upsert_user(uid, me.get("display_name") or uid, me.get("email"), token_info)
 
-    # Phase 3 will start the first-login library sync here (progressive). Stubbed for now.
+    # First-time login only: kick off full library ingestion in the background (SyncGate covers them
+    # while there are no tracks yet). Returning users are kept current by the daily library sync in
+    # the poller — we do NOT re-sync on every login.
     if is_new:
         try:
             from core.user_sync import start_first_sync

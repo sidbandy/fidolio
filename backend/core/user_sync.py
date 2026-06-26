@@ -20,6 +20,8 @@ def _run_sync(user_id):
 
 
 def start_first_sync(user_id):
-    """Start a user's library sync in a background thread (login returns immediately)."""
-    set_sync_status(user_id, "syncing", detail="starting…", saved_count=0)
+    """Start a user's library sync in a background thread (login returns immediately). Safe for
+    returning users too: we DON'T reset saved_count, so they stay in the app (not the SyncGate)
+    while their library refreshes incrementally in the background."""
+    set_sync_status(user_id, "syncing", detail="starting…")
     threading.Thread(target=_run_sync, args=(user_id,), daemon=True, name=f"sync-{user_id}").start()
